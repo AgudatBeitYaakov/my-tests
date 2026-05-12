@@ -5,6 +5,7 @@ import { FileDown, List } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ListPageHeader, LIST_SECONDARY_LINK_CLASS } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 
@@ -141,35 +142,35 @@ export function ImportStudentsClient() {
             </label>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-            <table className="min-w-[900px] w-full text-xs">
-              <thead className="bg-zinc-50 text-right text-zinc-600">
-                <tr>
-                  <th className="px-2 py-2">#</th>
-                  <th className="px-2 py-2">שם פרטי</th>
-                  <th className="px-2 py-2">שם משפחה</th>
-                  <th className="px-2 py-2">תעודת זהות</th>
-                  <th className="px-2 py-2">שכבה</th>
-                  <th className="px-2 py-2">כיתה</th>
-                  <th className="px-2 py-2">התמחות</th>
-                  <th className="px-2 py-2">מסלול</th>
-                  <th className="px-2 py-2">הערות</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40">
+            <Table className="min-w-[900px] text-xs">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>שם פרטי</TableHead>
+                  <TableHead>שם משפחה</TableHead>
+                  <TableHead>תעודת זהות</TableHead>
+                  <TableHead>שכבה</TableHead>
+                  <TableHead>כיתה</TableHead>
+                  <TableHead>התמחות</TableHead>
+                  <TableHead>מסלול</TableHead>
+                  <TableHead>הערות</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((r, i) => (
-                  <tr key={`${r.rowNumber}-${i}-${r.tz}`} className={r.errors.length ? "bg-red-50" : ""}>
-                    <td className="px-2 py-2 font-mono">{r.rowNumber}</td>
-                    <td className="px-2 py-2">{r.first_name}</td>
-                    <td className="px-2 py-2">{r.last_name}</td>
-                    <td className="px-2 py-2 font-mono" dir="ltr">
+                  <TableRow key={`${r.rowNumber}-${i}-${r.tz}`} className={r.errors.length ? "bg-red-50/90 dark:bg-red-950/20" : ""}>
+                    <TableCell className="font-mono">{r.rowNumber}</TableCell>
+                    <TableCell>{r.first_name}</TableCell>
+                    <TableCell>{r.last_name}</TableCell>
+                    <TableCell className="text-left font-mono" dir="ltr">
                       {r.tz}
-                    </td>
-                    <td className="px-2 py-2">{r.grade_level}</td>
-                    <td className="px-2 py-2">{r.class_name}</td>
-                    <td className="px-2 py-2">{r.specialization}</td>
-                    <td className="px-2 py-2">{r.track}</td>
-                    <td className="px-2 py-2 text-red-800">
+                    </TableCell>
+                    <TableCell>{r.grade_level}</TableCell>
+                    <TableCell>{r.class_name}</TableCell>
+                    <TableCell>{r.specialization}</TableCell>
+                    <TableCell>{r.track}</TableCell>
+                    <TableCell className="text-right text-red-800">
                       {r.errors.length ? r.errors.map((e) => <div key={e}>שורה {r.rowNumber}: {e}</div>) : null}
                       {r.warnings?.length
                         ? r.warnings.map((w) => (
@@ -178,11 +179,11 @@ export function ImportStudentsClient() {
                             </div>
                           ))
                         : null}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <TableClearFooter
               label="תצוגה מקדימה"
               count={rows.length}

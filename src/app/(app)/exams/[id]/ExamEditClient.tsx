@@ -4,6 +4,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { ExamStudentStatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import type { ExamStudentStatus } from "@/lib/types/db";
@@ -147,30 +148,30 @@ export function ExamEditClient({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-right text-zinc-600">
-            <tr>
-              <th className="px-4 py-3 font-medium">תלמידה</th>
-              <th className="px-4 py-3 font-medium">ת״ז</th>
-              <th className="px-4 py-3 font-medium">סטטוס</th>
-              <th className="px-4 py-3 font-medium">פעולות</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>תלמידה</TableHead>
+              <TableHead>ת״ז</TableHead>
+              <TableHead>סטטוס</TableHead>
+              <TableHead>פעולות</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {lines.length ? (
               lines.map((row) => (
-                <tr key={row.id} className="hover:bg-zinc-50/80">
-                  <td className="px-4 py-3 font-medium">
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">
                     {row.students ? `${row.students.last_name} ${row.students.first_name}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs" dir="ltr">
+                  </TableCell>
+                  <TableCell className="text-left font-mono text-xs" dir="ltr">
                     {row.students?.tz ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <ExamStudentStatusBadge status={row.status} />
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -194,18 +195,18 @@ export function ExamEditClient({ id }: { id: string }) {
                         הושלמה בהשלמה
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))
             ) : (
-              <tr>
-                <td className="px-4 py-10 text-center text-zinc-500" colSpan={4}>
+              <TableRow>
+                <TableCell className="py-10 text-center text-zinc-500" colSpan={4}>
                   אין תלמידות במבחן
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
         <TableClearFooter
           label="תלמידות במבחן"
           count={lines.length}

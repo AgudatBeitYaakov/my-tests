@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { ExamTargetType, Teacher } from "@/lib/types/db";
@@ -262,59 +263,57 @@ export function AssignmentsClient() {
             <span>{rows.length} שיבוצים</span>
           )}
         </ListTableToolbar>
-        <div className="overflow-x-auto">
-          <table className="app-table min-w-[720px]">
-            <thead>
-              <tr>
-                <th>מורה</th>
-                <th>מקצוע</th>
-                <th>סוג שיבוץ</th>
-                <th>ערך שיבוץ</th>
-                <th>שכבה</th>
-                <th>פעיל</th>
-                <th className="w-[1%] whitespace-nowrap" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length ? (
-                rows.map((a) => (
-                  <tr key={a.id}>
-                    <td className="font-medium text-slate-900 dark:text-zinc-100">{a.teachers?.name ?? "—"}</td>
-                    <td>{a.subject}</td>
-                    <td className="text-slate-600 dark:text-zinc-300">{a.target_type_label ?? a.target_type}</td>
-                    <td className="text-slate-800 dark:text-zinc-200">{a.target_label ?? a.target_id}</td>
-                    <td>{pickLookupName(a.grade_levels)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
-                          a.active
-                            ? "border-slate-200 bg-white shadow-sm hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/40"
-                            : "border-slate-100 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800/50"
-                        }`}
-                        onClick={() => void toggleActive(a, !a.active)}
-                      >
-                        {a.active ? "פעיל" : "כבוי"}
-                      </button>
-                    </td>
-                    <td>
-                      <button type="button" className={LIST_ROW_DELETE_CLASS} onClick={() => void removeRow(a.id)}>
-                        <Trash2 className="size-3.5 shrink-0 opacity-70" strokeWidth={2} />
-                        מחיקה
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
-                    {aLoad ? "טוען…" : "אין שיבוצים"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>מורה</TableHead>
+              <TableHead>מקצוע</TableHead>
+              <TableHead>סוג שיבוץ</TableHead>
+              <TableHead>ערך שיבוץ</TableHead>
+              <TableHead>שכבה</TableHead>
+              <TableHead>פעיל</TableHead>
+              <TableHead className="w-[1%] whitespace-nowrap" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length ? (
+              rows.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{a.teachers?.name ?? "—"}</TableCell>
+                  <TableCell>{a.subject}</TableCell>
+                  <TableCell className="text-slate-600 dark:text-zinc-300">{a.target_type_label ?? a.target_type}</TableCell>
+                  <TableCell className="text-slate-800 dark:text-zinc-200">{a.target_label ?? a.target_id}</TableCell>
+                  <TableCell>{pickLookupName(a.grade_levels)}</TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                        a.active
+                          ? "border-slate-200 bg-white shadow-sm hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/40"
+                          : "border-slate-100 bg-slate-50 text-slate-500 dark:border-zinc-700 dark:bg-zinc-800/50"
+                      }`}
+                      onClick={() => void toggleActive(a, !a.active)}
+                    >
+                      {a.active ? "פעיל" : "כבוי"}
+                    </button>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <button type="button" className={LIST_ROW_DELETE_CLASS} onClick={() => void removeRow(a.id)}>
+                      <Trash2 className="size-3.5 shrink-0 opacity-70" strokeWidth={2} />
+                      מחיקה
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
+                  {aLoad ? "טוען…" : "אין שיבוצים"}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         <TableClearFooter
           label="שיבוצי מורות"
           count={rows.length}

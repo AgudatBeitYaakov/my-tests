@@ -10,6 +10,10 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: "מערכת מבחנים",
   description: "ניהול מבחנים לסמינר",
+  icons: {
+    icon: [{ url: "/logo.png", type: "image/png", sizes: "any" }],
+    apple: [{ url: "/logo.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({

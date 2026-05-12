@@ -24,14 +24,22 @@ export default function LoginPage({
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-[var(--background)] p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[var(--shadow-card)]">
-        <h1 className="text-xl font-bold text-slate-900">כניסה למערכת</h1>
+    <div className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden p-6">
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-[url('/logo.png')] bg-center bg-no-repeat opacity-[0.18] [background-size:min(75vmin,440px)] dark:opacity-[0.12]"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-b from-[var(--background)] via-[var(--background)]/88 to-[var(--background)]"
+      />
+      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-8 shadow-[var(--shadow-card)] backdrop-blur-sm">
+        <h1 className="text-xl font-bold text-slate-900 dark:text-zinc-50">כניסה למערכת</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">הכניסי סיסמה כללית כדי להמשיך.</p>
 
         <form action={login} className="mt-6 space-y-4">
           <label className="block">
-            <div className="text-sm font-medium text-slate-700">סיסמה</div>
+            <div className="text-sm font-medium text-slate-700 dark:text-zinc-300">סיסמה</div>
             <input
               name="password"
               type="password"

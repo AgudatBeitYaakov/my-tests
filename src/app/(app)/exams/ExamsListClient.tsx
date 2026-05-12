@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
@@ -79,45 +80,43 @@ export function ExamsListClient() {
             <span>{count} מבחנים</span>
           )}
         </ListTableToolbar>
-        <div className="overflow-x-auto">
-          <table className="app-table min-w-[560px]">
-            <thead>
-              <tr>
-                <th>מורה</th>
-                <th>מקצוע</th>
-                <th>תאריך</th>
-                <th>יעד</th>
-                <th className="w-[1%] whitespace-nowrap" />
-              </tr>
-            </thead>
-            <tbody>
-              {data?.exams?.length ? (
-                data.exams.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.teachers?.name ?? "—"}</td>
-                    <td className="font-medium text-slate-900 dark:text-zinc-100">{e.subject}</td>
-                    <td>{e.exam_date}</td>
-                    <td className="text-slate-600 dark:text-zinc-300">
-                      {targetLabel[e.target_type] ?? e.target_type}: {e.target_label ?? e.target_id}
-                    </td>
-                    <td>
-                      <Link href={`/exams/${e.id}`} className={LIST_ROW_LINK_CLASS}>
-                        <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                        עדכון מבחן
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={5}>
-                    {isLoading ? "טוען…" : "אין מבחנים"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[560px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>מורה</TableHead>
+              <TableHead>מקצוע</TableHead>
+              <TableHead>תאריך</TableHead>
+              <TableHead>יעד</TableHead>
+              <TableHead className="w-[1%] whitespace-nowrap" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.exams?.length ? (
+              data.exams.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell>{e.teachers?.name ?? "—"}</TableCell>
+                  <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{e.subject}</TableCell>
+                  <TableCell>{e.exam_date}</TableCell>
+                  <TableCell className="text-slate-600 dark:text-zinc-300">
+                    {targetLabel[e.target_type] ?? e.target_type}: {e.target_label ?? e.target_id}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Link href={`/exams/${e.id}`} className={LIST_ROW_LINK_CLASS}>
+                      <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                      עדכון מבחן
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={5}>
+                  {isLoading ? "טוען…" : "אין מבחנים"}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         <TableClearFooter
           label="מבחנים"
           count={count}

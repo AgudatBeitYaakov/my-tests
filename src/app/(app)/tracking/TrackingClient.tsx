@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { ListDataCard, ListPageHeader, ListTableToolbar, LIST_ROW_LINK_CLASS } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
@@ -92,59 +93,57 @@ export function TrackingClient() {
             <span>{data?.tracking?.length ?? 0} שורות</span>
           )}
         </ListTableToolbar>
-        <div className="overflow-x-auto">
-          <table className="app-table app-table--compact min-w-[960px]">
-            <thead>
-              <tr>
-                <th>מורה</th>
-                <th>מקצוע</th>
-                <th>תאריך</th>
-                <th>מבחן</th>
-                <th>עריכה</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.tracking?.length ? (
-                data.tracking.map((row) => (
-                  <tr key={row.id} className="align-top">
-                    <td className="font-medium text-slate-900 dark:text-zinc-100">{row.exam?.teacher_name ?? "—"}</td>
-                    <td>{row.exam?.subject ?? "—"}</td>
-                    <td className="whitespace-nowrap">{row.exam?.exam_date ?? "—"}</td>
-                    <td>
-                      <Link href={`/exams/${row.exam_id}`} className={LIST_ROW_LINK_CLASS}>
-                        פתיחת מבחן
-                      </Link>
-                    </td>
-                    <td>
-                      {editingId === row.id ? (
-                        <TrackingRowForm
-                          row={row}
-                          onCancel={() => setEditingId(null)}
-                          onSave={(payload) => void saveRow(row.id, payload)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/30"
-                          onClick={() => setEditingId(row.id)}
-                        >
-                          <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                          עריכה
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={5}>
-                    {isLoading ? "טוען…" : "אין נתוני מעקב"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[960px] text-xs [&_th]:h-9 [&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-1.5">
+          <TableHeader>
+            <TableRow>
+              <TableHead>מורה</TableHead>
+              <TableHead>מקצוע</TableHead>
+              <TableHead>תאריך</TableHead>
+              <TableHead>מבחן</TableHead>
+              <TableHead>עריכה</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.tracking?.length ? (
+              data.tracking.map((row) => (
+                <TableRow key={row.id} className="align-top">
+                  <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{row.exam?.teacher_name ?? "—"}</TableCell>
+                  <TableCell>{row.exam?.subject ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{row.exam?.exam_date ?? "—"}</TableCell>
+                  <TableCell>
+                    <Link href={`/exams/${row.exam_id}`} className={LIST_ROW_LINK_CLASS}>
+                      פתיחת מבחן
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {editingId === row.id ? (
+                      <TrackingRowForm
+                        row={row}
+                        onCancel={() => setEditingId(null)}
+                        onSave={(payload) => void saveRow(row.id, payload)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/30"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                        עריכה
+                      </button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={5}>
+                  {isLoading ? "טוען…" : "אין נתוני מעקב"}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         <TableClearFooter
           label="שורות מעקב"
           count={count}

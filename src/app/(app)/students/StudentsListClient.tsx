@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { Student } from "@/lib/types/db";
@@ -183,56 +184,54 @@ export function StudentsListClient() {
             <span>{data?.students?.length ?? 0} תוצאות</span>
           )}
         </ListTableToolbar>
-        <div className="overflow-x-auto">
-          <table className="app-table min-w-[720px]">
-            <thead>
-              <tr>
-                <th>שם</th>
-                <th>ת״ז</th>
-                <th>שכבה</th>
-                <th>כיתה</th>
-                <th>מסלול</th>
-                <th>התמחות</th>
-                <th className="w-[1%] whitespace-nowrap" />
-              </tr>
-            </thead>
-            <tbody>
-              {data?.students?.length ? (
-                data.students.map((s) => (
-                  <tr key={s.id}>
-                    <td className="font-medium">
-                      <Link
-                        href={`/students/${s.id}`}
-                        className="text-slate-900 underline-offset-2 hover:text-blue-800 hover:underline dark:text-zinc-100 dark:hover:text-blue-300"
-                      >
-                        {s.last_name} {s.first_name}
-                      </Link>
-                    </td>
-                    <td className="font-mono text-xs" dir="ltr">
-                      {s.tz}
-                    </td>
-                    <td>{pickLookupName(s.grade_levels)}</td>
-                    <td>{pickLookupName(s.classes)}</td>
-                    <td>{pickLookupName(s.tracks)}</td>
-                    <td>{pickLookupName(s.specializations)}</td>
-                    <td>
-                      <Link href={`/students/${s.id}/edit`} className={LIST_ROW_LINK_CLASS}>
-                        <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                        עריכה
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
-                    {isLoading ? "טוען…" : "אין תלמידות להצגה"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>שם</TableHead>
+              <TableHead>ת״ז</TableHead>
+              <TableHead>שכבה</TableHead>
+              <TableHead>כיתה</TableHead>
+              <TableHead>מסלול</TableHead>
+              <TableHead>התמחות</TableHead>
+              <TableHead className="w-[1%] whitespace-nowrap" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.students?.length ? (
+              data.students.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/students/${s.id}`}
+                      className="text-slate-900 underline-offset-2 hover:text-blue-800 hover:underline dark:text-zinc-100 dark:hover:text-blue-300"
+                    >
+                      {s.last_name} {s.first_name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-left font-mono text-xs" dir="ltr">
+                    {s.tz}
+                  </TableCell>
+                  <TableCell>{pickLookupName(s.grade_levels)}</TableCell>
+                  <TableCell>{pickLookupName(s.classes)}</TableCell>
+                  <TableCell>{pickLookupName(s.tracks)}</TableCell>
+                  <TableCell>{pickLookupName(s.specializations)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Link href={`/students/${s.id}/edit`} className={LIST_ROW_LINK_CLASS}>
+                      <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                      עריכה
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
+                  {isLoading ? "טוען…" : "אין תלמידות להצגה"}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         <TableClearFooter
           label="תלמידות"
           count={count}
