@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   async function login(formData: FormData) {
     "use server";
@@ -56,9 +56,7 @@ export default function LoginPage({
 
           <form id="login-form" action={login} className="mt-8 space-y-5">
             <LoginPasswordDots />
-
             <LoginError searchParams={searchParams} />
-
             <button
               type="submit"
               className="w-full rounded-2xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--color-primary-hover)] hover:shadow-lg active:scale-[0.99]"
@@ -72,8 +70,9 @@ export default function LoginPage({
   );
 }
 
-async function LoginError({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+async function LoginError({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const p = await searchParams;
+  const error = typeof p.error === "string" ? p.error : undefined;
   if (error !== "wrong_password") return null;
   return (
     <div className="rounded-2xl border border-red-200/90 bg-red-50 px-4 py-2.5 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
