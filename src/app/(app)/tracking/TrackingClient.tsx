@@ -35,6 +35,31 @@ function toLocalInput(iso: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function formatSubmittedDisplay(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function BoolCell({ value }: { value: boolean }) {
+  return (
+    <span
+      className={
+        value ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-zinc-500"
+      }
+    >
+      {value ? "כן" : "לא"}
+    </span>
+  );
+}
+
 export function TrackingClient() {
   const { data, error, isLoading, mutate } = useSWR<{ tracking: Row[] }>("/api/tracking", fetcher);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,7 +94,7 @@ export function TrackingClient() {
     <div className="space-y-8">
       <ListPageHeader
         title="מעקב מבחנים"
-        subtitle="עריכה בשורה: פתיחה, שינוי שדות ושמירה מפורשת"
+        subtitle="מצב המעקב בטבלה; לשינוי — לחצי «עריכה» בשורה"
         actions={
           <ExportExcelButton
             label="ייצוא לאקסל"
@@ -93,13 +118,19 @@ export function TrackingClient() {
             <span>{data?.tracking?.length ?? 0} שורות</span>
           )}
         </ListTableToolbar>
-        <Table className="min-w-[960px] text-xs [&_th]:h-9 [&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-1.5">
+        <Table className="min-w-[1320px] text-xs [&_th]:h-9 [&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-1.5">
           <TableHeader>
             <TableRow>
               <TableHead>מורה</TableHead>
               <TableHead>מקצוע</TableHead>
               <TableHead>תאריך</TableHead>
               <TableHead>מבחן</TableHead>
+              <TableHead className="whitespace-nowrap">הוגש מבחן</TableHead>
+              <TableHead className="whitespace-nowrap">אישור רכזת</TableHead>
+              <TableHead className="whitespace-nowrap">נשלח לבדיקה</TableHead>
+              <TableHead className="whitespace-nowrap">ציונים הוגשו</TableHead>
+              <TableHead className="whitespace-nowrap">ציונים אושרו</TableHead>
+              <TableHead className="whitespace-nowrap">הועבר למערכת</TableHead>
               <TableHead>עריכה</TableHead>
             </TableRow>
           </TableHeader>
@@ -114,6 +145,22 @@ export function TrackingClient() {
                     <Link href={`/exams/${row.exam_id}`} className={LIST_ROW_LINK_CLASS}>
                       פתיחת מבחן
                     </Link>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap tabular-nums">{formatSubmittedDisplay(row.submitted_exam)}</TableCell>
+                  <TableCell>
+                    <BoolCell value={row.approved_by_coordinator} />
+                  </TableCell>
+                  <TableCell>
+                    <BoolCell value={row.sent_for_review} />
+                  </TableCell>
+                  <TableCell>
+                    <BoolCell value={row.grades_submitted} />
+                  </TableCell>
+                  <TableCell>
+                    <BoolCell value={row.grades_approved} />
+                  </TableCell>
+                  <TableCell>
+                    <BoolCell value={row.transferred_to_system} />
                   </TableCell>
                   <TableCell>
                     {editingId === row.id ? (
@@ -137,7 +184,7 @@ export function TrackingClient() {
               ))
             ) : (
               <TableRow>
-                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={5}>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={11}>
                   {isLoading ? "טוען…" : "אין נתוני מעקב"}
                 </TableCell>
               </TableRow>
