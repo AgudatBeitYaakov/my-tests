@@ -16,6 +16,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { formatCohortGradeLabel } from "@/lib/academic/studentGrade";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { Student } from "@/lib/types/db";
 
@@ -29,7 +30,7 @@ const fetcher = (url: string) => fetch(url).then((r) => {
 
 export function StudentsListClient() {
   const [q, setQ] = useState("");
-  const [gradeLevelId, setGradeLevelId] = useState("");
+  const [cohortGrade, setCohortGrade] = useState("");
   const [classId, setClassId] = useState("");
   const [specializationId, setSpecializationId] = useState("");
   const [trackId, setTrackId] = useState("");
@@ -37,18 +38,17 @@ export function StudentsListClient() {
   const url = useMemo(() => {
     const p = new URLSearchParams();
     if (deferred.trim()) p.set("q", deferred.trim());
-    if (gradeLevelId) p.set("grade_level_id", gradeLevelId);
+    if (cohortGrade) p.set("cohort_grade", cohortGrade);
     if (classId) p.set("class_id", classId);
     if (specializationId) p.set("specialization_id", specializationId);
     if (trackId) p.set("track_id", trackId);
     const qs = p.toString();
     return `/api/students${qs ? `?${qs}` : ""}`;
-  }, [deferred, gradeLevelId, classId, specializationId, trackId]);
+  }, [deferred, cohortGrade, classId, specializationId, trackId]);
 
   const { data, error, isLoading, mutate } = useSWR<{ students: Student[] }>(url, fetcher);
   const count = data?.students?.length ?? 0;
 
-  const { data: glData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/grade-levels", fetcher);
   const { data: clData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/classes", fetcher);
   const { data: spData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/specializations", fetcher);
   const { data: trData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/tracks", fetcher);
@@ -82,12 +82,12 @@ export function StudentsListClient() {
         <div className="bg-gradient-to-bl from-slate-50/95 via-white to-sky-50/35 p-5 sm:p-6 dark:from-slate-900/50 dark:via-zinc-900/35 dark:to-slate-900/25">
           <div className="mb-4 flex flex-col gap-2 border-b border-slate-200/60 pb-4 dark:border-slate-700/50 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-semibold text-slate-800 dark:text-zinc-100">סינון תוצאות</p>
-            {(gradeLevelId || classId || trackId || specializationId) ? (
+            {(cohortGrade || classId || trackId || specializationId) ? (
               <button
                 type="button"
                 className="self-start text-sm font-medium text-[var(--color-primary)] underline-offset-2 hover:underline dark:text-blue-300"
                 onClick={() => {
-                  setGradeLevelId("");
+                  setCohortGrade("");
                   setClassId("");
                   setSpecializationId("");
                   setTrackId("");
@@ -112,16 +112,13 @@ export function StudentsListClient() {
             <label className="block">
               <span className="block text-xs font-semibold text-slate-600 dark:text-zinc-400">שכבה</span>
               <select
-                value={gradeLevelId}
-                onChange={(e) => setGradeLevelId(e.target.value)}
+                value={cohortGrade}
+                onChange={(e) => setCohortGrade(e.target.value)}
                 className={filterControlClass}
               >
                 <option value="">הכל</option>
-                {(glData?.items ?? []).map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name}
-                  </option>
-                ))}
+                <option value="A">A</option>
+                <option value="B">B</option>
               </select>
             </label>
 
@@ -216,7 +213,10 @@ export function StudentsListClient() {
                   <TableCell className="text-left font-mono text-xs" dir="ltr">
                     {s.tz}
                   </TableCell>
-                  <TableCell>{pickLookupName(s.grade_levels)}</TableCell>
+                  <TableCell>
+                    {formatCohortGradeLabel(s.computed_grade_level)}
+                    {s.cohort_name ? ` (מחזור ${s.cohort_name})` : ""}
+                  </TableCell>
                   <TableCell>{pickLookupName(s.classes)}</TableCell>
                   <TableCell>{pickLookupName(s.tracks)}</TableCell>
                   <TableCell>{pickLookupName(s.specializations)}</TableCell>

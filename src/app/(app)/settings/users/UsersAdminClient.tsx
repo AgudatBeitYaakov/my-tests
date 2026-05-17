@@ -1,0 +1,72 @@
+"use client";
+
+import useSWR from "swr";
+import { ListPageHeader } from "@/components/ui/ListPage";
+
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error("אין הרשאה או שגיאה");
+  return r.json();
+});
+
+type UserRow = {
+  id: string;
+  username: string;
+  full_name: string;
+  role: "admin" | "secretary";
+  active: boolean;
+};
+
+export function UsersAdminClient() {
+  const { data, error, mutate } = useSWR<{ users: UserRow[] }>("/api/users", fetcher);
+
+  async function createUser(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const r = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: fd.get("username"),
+        password: fd.get("password"),
+        full_name: fd.get("full_name"),
+        role: fd.get("role"),
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return alert((j as { error?: string }).error ?? "שגיאה");
+    e.currentTarget.reset();
+    await mutate();
+  }
+
+  return (
+    <div className="space-y-8">
+      <ListPageHeader title="ניהול משתמשים" subtitle="admin בלבד — הוספה, עריכה, איפוס סיסמה" />
+      {error ? <p className="text-sm text-red-600">{(error as Error).message}</p> : null}
+
+      <form onSubmit={createUser} className="grid max-w-lg gap-3 rounded-xl border border-zinc-200 bg-white p-4">
+        <h2 className="font-semibold text-zinc-900">משתמש חדש</h2>
+        <input name="username" required placeholder="שם משתמש" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+        <input name="full_name" required placeholder="שם מלא" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+        <input name="password" type="password" required placeholder="סיסמה" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+        <select name="role" className="rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+          <option value="secretary">מזכירה</option>
+          <option value="admin">מנהלת</option>
+        </select>
+        <button type="submit" className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">
+          הוספה
+        </button>
+      </form>
+
+      <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+        {(data?.users ?? []).map((u) => (
+          <li key={u.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+            <span>
+              {u.full_name} ({u.username}) — {u.role === "admin" ? "מנהלת" : "מזכירה"}
+            </span>
+            <span className={u.active ? "text-emerald-600" : "text-red-600"}>{u.active ? "פעיל" : "לא פעיל"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

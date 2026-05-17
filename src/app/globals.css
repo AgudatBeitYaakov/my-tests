@@ -106,6 +106,17 @@ body {
   font-size: 1.05rem;
 }
 
+@media print {
+  aside,
+  header button,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
+
 @keyframes card-lift-in {
   from {
     opacity: 0;

@@ -1,5 +1,4 @@
 export type LookupMaps = {
-  gradeByName: Map<string, string>;
   classByName: Map<string, string>;
   specByName: Map<string, string>;
   trackByName: Map<string, string>;
@@ -10,7 +9,6 @@ export type ParsedImportRow = {
   first_name: string;
   last_name: string;
   tz: string;
-  grade_level: string;
   class_name: string;
   specialization: string;
   track: string;
@@ -20,7 +18,6 @@ export type ValidatedImportRow = ParsedImportRow & {
   rowNumber: number;
   errors: string[];
   resolved?: {
-    grade_level_id: string;
     class_id: string;
     specialization_id: string | null;
     track_id: string | null;
@@ -32,7 +29,6 @@ export const FIELD_ALIASES: Record<keyof Omit<ParsedImportRow, "rowNumber">, rea
   first_name: ["שם פרטי", "first_name"],
   last_name: ["שם משפחה", "last_name"],
   tz: ["תעודת זהות", "ת״ז", "tz"],
-  grade_level: ["שכבה", "grade_level"],
   class_name: ["כיתה", "class_name"],
   specialization: ["התמחות", "specialization"],
   track: ["מסלול", "track"],
@@ -42,7 +38,6 @@ const FIELD_LABELS_HE: Record<keyof Omit<ParsedImportRow, "rowNumber">, string> 
   first_name: "שם פרטי",
   last_name: "שם משפחה",
   tz: "תעודת זהות",
-  grade_level: "שכבה",
   class_name: "כיתה",
   specialization: "התמחות",
   track: "מסלול",
@@ -52,7 +47,6 @@ const REQUIRED_FIELDS: (keyof typeof FIELD_ALIASES)[] = [
   "first_name",
   "last_name",
   "tz",
-  "grade_level",
   "class_name",
   "specialization",
   "track",
@@ -65,12 +59,21 @@ function normalizeHeaderKey(k: string): string {
 }
 
 export function assertRequiredHeaders(rawKeys: string[]): string | null {
-  const nk = new Set(rawKeys.map((k) => normalizeHeaderKey(k)));
+  const nk = new Set(rawKeys.map((k) => normalizeHeaderKey(k)).filter(Boolean));
+  const missing: string[] = [];
   for (const field of REQUIRED_FIELDS) {
     const ok = FIELD_ALIASES[field].some((a) => nk.has(normalizeHeaderKey(a)));
-    if (!ok) return `חסרה עמודת חובה: ${FIELD_LABELS_HE[field]}`;
+    if (!ok) missing.push(FIELD_LABELS_HE[field]);
   }
-  return null;
+  if (!missing.length) return null;
+  return `חסרות עמודות בקובץ: ${missing.join(", ")}. הורידי תבנית מעודכנת או ודאי ששורה ראשונה היא כותרות.`;
+}
+
+export function filterDataRows(raw: Record<string, unknown>[]): Record<string, unknown>[] {
+  return raw.filter((row) => {
+    const vals = Object.values(row).map((v) => normCell(v));
+    return vals.some((v) => v.length > 0);
+  });
 }
 
 function normCell(v: unknown): string {
@@ -100,7 +103,6 @@ export function sheetRowsToObjects(raw: Record<string, unknown>[]): ParsedImport
       first_name: cellFromRow(obj, "first_name"),
       last_name: cellFromRow(obj, "last_name"),
       tz: cellFromRow(obj, "tz"),
-      grade_level: cellFromRow(obj, "grade_level"),
       class_name: cellFromRow(obj, "class_name"),
       specialization: cellFromRow(obj, "specialization"),
       track: cellFromRow(obj, "track"),
@@ -124,7 +126,6 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
     if (!r.first_name) errors.push("שם פרטי חסר");
     if (!r.last_name) errors.push("שם משפחה חסר");
     if (!r.tz) errors.push("תעודת זהות חסרה");
-    if (!r.grade_level) errors.push("שכבה חסרה");
     if (!r.class_name) errors.push("כיתה חסרה");
     if (!r.specialization) errors.push("התמחות חסרה");
     if (!r.track) errors.push("מסלול חסר");
@@ -133,9 +134,6 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
       if (seenTz.has(r.tz)) errors.push(`תעודת זהות ${r.tz} מופיעה יותר מפעם אחת בקובץ`);
       seenTz.add(r.tz);
     }
-
-    const g = lookupName(maps.gradeByName, r.grade_level, "השכבה");
-    if (g.err) errors.push(g.err);
 
     const c = lookupName(maps.classByName, r.class_name, "הכיתה");
     if (c.err) errors.push(c.err);
@@ -147,9 +145,8 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
     if (t.err) errors.push(t.err);
 
     const resolved =
-      errors.length === 0 && g.id && c.id
+      errors.length === 0 && c.id
         ? {
-            grade_level_id: g.id,
             class_id: c.id,
             specialization_id: s.id ?? null,
             track_id: t.id ?? null,

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { ExamStudentStatusBadge, MakeupStatusBadge } from "@/components/ui/StatusBadge";
+import { NotesButton } from "@/components/ui/NotesButton";
+import { PrintButton } from "@/components/PrintButton";
 import { Spinner } from "@/components/ui/Spinner";
+import { formatCohortGradeLabel } from "@/lib/academic/studentGrade";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { ExamStudentStatus, MakeupExamStatus, Student } from "@/lib/types/db";
 
@@ -38,8 +41,18 @@ export function StudentDetailClient({ id }: { id: string }) {
     makeups: MakeupRow[];
   }>(`/api/students/${id}`, fetcher);
 
+  const { data: historyData } = useSWR<{ history: unknown[]; audit: unknown[] }>(
+    `/api/students/${id}/history`,
+    fetcher,
+  );
+
   async function handleDelete() {
-    if (!confirm("למחוק את התלמידה?")) return;
+    if (
+      !confirm(
+        "מחיקת תלמידה תמחק גם נתונים קשורים (מבחנים, השלמות וכו'). פעולה זו אינה ניתנת לביטול. להמשיך?",
+      )
+    )
+      return;
     const r = await fetch(`/api/students/${id}`, { method: "DELETE" });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
@@ -65,24 +78,28 @@ export function StudentDetailClient({ id }: { id: string }) {
   const s = data.student;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-6 print:space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between print:block">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">
+          <h1 className="text-2xl font-semibold">
             {s.last_name} {s.first_name}
           </h1>
           <p className="mt-1 text-sm text-zinc-600">
             ת״ז <span dir="ltr" className="font-mono">{s.tz}</span>
             {" · "}
-            שכבה {pickLookupName(s.grade_levels)} · כיתה {pickLookupName(s.classes)}
-            {s.track_id ? ` · מסלול ${pickLookupName(s.tracks)}` : ""}
-            {s.specialization_id ? ` · התמחות ${pickLookupName(s.specializations)}` : ""}
+            שכבה {formatCohortGradeLabel(s.computed_grade_level)}
+            {s.cohort_name ? ` · מחזור ${s.cohort_name}` : ""}
+            · כיתה {pickLookupName(s.classes)}
+            {pickLookupName(s.tracks) !== "—" ? ` · מסלול ${pickLookupName(s.tracks)}` : ""}
+            {pickLookupName(s.specializations) !== "—" ? ` · התמחות ${pickLookupName(s.specializations)}` : ""}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <NotesButton entity="students" id={id} />
+          <PrintButton />
           <Link
             href={`/students/${id}/edit`}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm hover:bg-zinc-50"
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
           >
             עריכה
           </Link>
@@ -93,18 +110,15 @@ export function StudentDetailClient({ id }: { id: string }) {
           >
             מחיקה
           </button>
-          <Link
-            href="/students"
-            className="rounded-xl bg-gradient-to-l from-violet-600 to-indigo-600 px-3 py-2 text-sm text-white shadow-md hover:opacity-95"
-          >
+          <Link href="/students" className="rounded-xl bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800">
             חזרה לרשימה
           </Link>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-md">
-          <h2 className="text-lg font-semibold text-zinc-900">מבחנים</h2>
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">מבחנים</h2>
           <ul className="mt-3 divide-y divide-zinc-100">
             {data.exam_students?.length ? (
               data.exam_students.map((row) => (
@@ -118,7 +132,7 @@ export function StudentDetailClient({ id }: { id: string }) {
                   <div className="flex items-center gap-2">
                     <ExamStudentStatusBadge status={row.status} />
                     {row.exam_id ? (
-                      <Link href={`/exams/${row.exam_id}`} className="text-xs text-violet-700 hover:underline">
+                      <Link href={`/exams/${row.exam_id}`} className="text-xs text-sky-700 hover:underline">
                         למבחן
                       </Link>
                     ) : null}
@@ -131,8 +145,8 @@ export function StudentDetailClient({ id }: { id: string }) {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-md">
-          <h2 className="text-lg font-semibold text-zinc-900">השלמות</h2>
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold">השלמות</h2>
           <ul className="mt-3 divide-y divide-zinc-100">
             {data.makeups?.length ? (
               data.makeups.map((m) => (
@@ -150,6 +164,15 @@ export function StudentDetailClient({ id }: { id: string }) {
           </ul>
         </section>
       </div>
+
+      {(historyData?.history?.length ?? 0) > 0 || (historyData?.audit?.length ?? 0) > 0 ? (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm print:hidden">
+          <h2 className="text-lg font-semibold">היסטוריה</h2>
+          <p className="mt-2 text-sm text-zinc-600">
+            {historyData?.history?.length ?? 0} שינויי כיתה/מסלול · {historyData?.audit?.length ?? 0} רשומות ביקורת
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

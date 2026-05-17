@@ -1,7 +1,9 @@
-/** Select fragment for PostgREST — לוקאפים מקושרים לתלמידה */
+export { buildStudentWithLookupsSelect as getStudentWithLookupsSelect } from "@/lib/cohorts/db";
+
+/** @deprecated השתמשי ב-getStudentWithLookupsSelect(supabase) לתאימות סכימה */
 export const STUDENT_WITH_LOOKUPS = `
   *,
-  grade_levels ( id, name ),
+  cohorts ( id, name ),
   classes ( id, name ),
   specializations ( id, name ),
   tracks ( id, name )

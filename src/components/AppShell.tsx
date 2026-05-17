@@ -20,6 +20,9 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
+import { AcademicYearSelector } from "@/components/AcademicYearSelector";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; iconClass: string };
 
@@ -34,6 +37,8 @@ const nav: NavItem[] = [
   { href: "/makeups", label: "השלמות", icon: AlarmClock, iconClass: "text-orange-600 dark:text-orange-400" },
   { href: "/tracking", label: "מעקב", icon: Eye, iconClass: "text-teal-600 dark:text-teal-400" },
   { href: "/settings", label: "לוקאפים", icon: Settings2, iconClass: "text-fuchsia-600 dark:text-fuchsia-400" },
+  { href: "/settings/open-year", label: "פתיחת שנה", icon: Settings2, iconClass: "text-blue-600 dark:text-blue-400" },
+  { href: "/settings/users", label: "משתמשים", icon: Settings2, iconClass: "text-slate-600 dark:text-slate-400" },
 ];
 
 function isNavActive(pathname: string, item: NavItem): boolean {
@@ -177,15 +182,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-[linear-gradient(145deg,rgb(248_250_252_/_0.95)_0%,rgb(239_246_255_/_0.45)_32%,var(--background)_58%)] dark:bg-[linear-gradient(145deg,rgb(15_23_42_/_0.98)_0%,rgb(30_41_59_/_0.6)_45%,var(--background)_70%)]">
-        <header className="sticky top-0 z-30 flex h-[3.75rem] shrink-0 items-center gap-4 border-b border-[var(--border)] bg-[var(--surface)]/85 px-4 shadow-sm backdrop-blur-md md:px-8 dark:bg-[var(--surface)]/80">
+        <header className="sticky top-0 z-30 flex h-auto min-h-[3.75rem] shrink-0 flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)]/85 px-4 py-2 shadow-sm backdrop-blur-md md:px-8 dark:bg-[var(--surface)]/80">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-bold tracking-tight text-[var(--color-primary)] dark:text-blue-200">{pageTitle}</h1>
-            <p className="truncate text-xs text-[var(--muted)]">
-              <span className="font-mono text-[10px] opacity-70" dir="ltr">
-                {pathname}
-              </span>
-            </p>
           </div>
+          <AcademicYearSelector />
+          <div className="hidden w-full max-w-sm md:block md:w-72">
+            <GlobalSearch />
+          </div>
+          <NotificationsBell />
         </header>
 
         <motion.main

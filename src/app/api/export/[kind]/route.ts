@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { enrichStudentsWithGradeForYear, formatCohortGradeLabel } from "@/lib/academic/studentGrade";
+import { resolveAcademicYearId } from "@/lib/academic/year";
 import { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/db/assignmentSelect";
-import { STUDENT_WITH_LOOKUPS } from "@/lib/db/studentSelect";
+import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { ExamTargetType } from "@/lib/types/db";
@@ -89,21 +91,31 @@ export async function GET(_request: Request, ctx: { params: Promise<{ kind: stri
 
   try {
     if (kind === "students") {
-      const data = await paginateSelect((from, to) =>
-        supabase.from("students").select(STUDENT_WITH_LOOKUPS).order("last_name").order("first_name").range(from, to),
-      );
-      const rows = data.map((s) => {
-        const r = s as Record<string, unknown>;
-        return {
-          תעודת_זהות: String(r.tz ?? ""),
-          שם_פרטי: String(r.first_name ?? ""),
-          שם_משפחה: String(r.last_name ?? ""),
-          שכבה: pickLookupName(r.grade_levels),
-          כיתה: pickLookupName(r.classes),
-          התמחות: pickLookupName(r.specializations),
-          מסלול: pickLookupName(r.tracks),
-        };
+      const yearId = await resolveAcademicYearId(supabase);
+      const studentSelect = await getStudentWithLookupsSelect(supabase);
+      const data = await paginateSelect((from, to) => {
+        let q = supabase
+          .from("students")
+          .select(studentSelect)
+          .order("last_name")
+          .order("first_name")
+          .range(from, to);
+        if (yearId) q = q.eq("academic_year_id", yearId);
+        return q;
       });
+      const enriched = yearId
+        ? await enrichStudentsWithGradeForYear(supabase, data, yearId)
+        : data.map((s) => ({ ...s, computed_grade_level: null, cohort_name: null }));
+      const rows = enriched.map((s) => ({
+        תעודת_זהות: s.tz,
+        שם_פרטי: s.first_name,
+        שם_משפחה: s.last_name,
+        מחזור: s.cohort_name ?? pickLookupName(s.cohorts),
+        שכבה: formatCohortGradeLabel(s.computed_grade_level),
+        כיתה: pickLookupName(s.classes),
+        התמחות: pickLookupName(s.specializations),
+        מסלול: pickLookupName(s.tracks),
+      }));
       return NextResponse.json({ rows });
     }
 

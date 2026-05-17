@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const SESSION_COOKIE = "app_session";
-const SESSION_VALUE = "1";
+const USER_COOKIE = "app_user_id";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,12 +9,14 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/login") ||
+    pathname === "/api/auth/login" ||
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
   }
 
-  const ok = request.cookies.get(SESSION_COOKIE)?.value === SESSION_VALUE;
+  const uid = request.cookies.get(USER_COOKIE)?.value?.trim();
+  const ok = Boolean(uid && /^[0-9a-f-]{36}$/i.test(uid));
 
   if (!ok) {
     if (pathname.startsWith("/api/")) {

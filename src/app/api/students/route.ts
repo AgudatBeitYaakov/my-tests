@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { STUDENT_WITH_LOOKUPS } from "@/lib/db/studentSelect";
+import { enrichStudentsWithGradeForYear } from "@/lib/academic/studentGrade";
+import { loadYearCohortConfig } from "@/lib/academic/yearCohorts";
+import { resolveAcademicYearId } from "@/lib/academic/year";
+import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -7,20 +10,36 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").trim();
-  const gradeLevelId = (searchParams.get("grade_level_id") ?? "").trim();
+  const cohortGrade = (searchParams.get("cohort_grade") ?? "").trim();
   const classId = (searchParams.get("class_id") ?? "").trim();
   const specializationId = (searchParams.get("specialization_id") ?? "").trim();
   const trackId = (searchParams.get("track_id") ?? "").trim();
 
   const supabase = createSupabaseAdminClient();
+  const yearId = await resolveAcademicYearId(supabase);
+  if (!yearId) {
+    return NextResponse.json({ students: [], error: "לא נבחרה שנת לימודים" }, { status: 400 });
+  }
+
+  const year = await loadYearCohortConfig(supabase, yearId);
+  if (!year) {
+    return NextResponse.json({ students: [], error: "שנת לימודים לא נמצאה" }, { status: 400 });
+  }
+
+  let cohortFilterIds: string[] | null = null;
+  if (cohortGrade === "A" && year.cohort_a_id) cohortFilterIds = [year.cohort_a_id];
+  if (cohortGrade === "B" && year.cohort_b_id) cohortFilterIds = [year.cohort_b_id];
+
+  const studentSelect = await getStudentWithLookupsSelect(supabase);
   let query = supabase
     .from("students")
-    .select(STUDENT_WITH_LOOKUPS)
+    .select(studentSelect)
+    .eq("academic_year_id", yearId)
     .order("last_name", { ascending: true })
     .order("first_name", { ascending: true })
     .limit(300);
 
-  if (gradeLevelId) query = query.eq("grade_level_id", gradeLevelId);
+  if (cohortFilterIds) query = query.in("cohort_id", cohortFilterIds);
   if (classId) query = query.eq("class_id", classId);
   if (specializationId) query = query.eq("specialization_id", specializationId);
   if (trackId) query = query.eq("track_id", trackId);
@@ -47,5 +66,8 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ students: data ?? [] });
+
+  const students = await enrichStudentsWithGradeForYear(supabase, data ?? [], yearId);
+
+  return NextResponse.json({ students });
 }

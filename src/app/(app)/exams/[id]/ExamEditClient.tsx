@@ -6,6 +6,8 @@ import { ExamStudentStatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { NotesButton } from "@/components/ui/NotesButton";
+import { PrintButton } from "@/components/PrintButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import type { ExamStudentStatus } from "@/lib/types/db";
 
@@ -107,6 +109,8 @@ export function ExamEditClient({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <NotesButton entity="exams" id={id} />
+          <PrintButton label="רשימת תלמידות" />
           <ExportExcelButton
             label="תלמידות במבחן לאקסל"
             filename={`תלמידות-מבחן-${e.exam_date}`}

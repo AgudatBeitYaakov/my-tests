@@ -1,20 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { hasAppSession } from "@/lib/auth/passwordSession";
+import { getActiveAcademicYear } from "@/lib/academic/year";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewStudentPage() {
   const supabase = createSupabaseAdminClient();
-  const [gl, cl, sp, tr] = await Promise.all([
-    supabase.from("grade_levels").select("id,name").order("name", { ascending: true }),
+  const activeYear = await getActiveAcademicYear(supabase);
+  if (!activeYear) {
+    throw new Error("לא הוגדרה שנת לימודים פעילה");
+  }
+
+  const { listCohorts } = await import("@/lib/cohorts/db");
+  const [cohortItems, cl, sp, tr] = await Promise.all([
+    listCohorts(supabase),
     supabase.from("classes").select("id,name").order("name", { ascending: true }),
     supabase.from("specializations").select("id,name").order("name", { ascending: true }),
     supabase.from("tracks").select("id,name").order("name", { ascending: true }),
   ]);
 
-  if (gl.error) throw new Error(gl.error.message);
   if (cl.error) throw new Error(cl.error.message);
   if (sp.error) throw new Error(sp.error.message);
   if (tr.error) throw new Error(tr.error.message);
@@ -23,24 +29,27 @@ export default async function NewStudentPage() {
     "use server";
     if (!(await hasAppSession())) redirect("/login");
     const sb = createSupabaseAdminClient();
+    const year = await getActiveAcademicYear(sb);
+    if (!year) throw new Error("לא הוגדרה שנת לימודים פעילה");
 
     const first_name = String(formData.get("first_name") ?? "").trim();
     const last_name = String(formData.get("last_name") ?? "").trim();
     const tz = String(formData.get("tz") ?? "").trim();
-    const grade_level_id = String(formData.get("grade_level_id") ?? "").trim();
+    const cohort_id = String(formData.get("cohort_id") ?? "").trim();
     const class_id = String(formData.get("class_id") ?? "").trim();
     const specialization_id = String(formData.get("specialization_id") ?? "").trim() || null;
     const track_id = String(formData.get("track_id") ?? "").trim() || null;
 
-    if (!grade_level_id || !class_id) {
-      throw new Error("שכבה וכיתה חובה");
+    if (!cohort_id || !class_id) {
+      throw new Error("מחזור וכיתה חובה");
     }
 
     const { error } = await sb.from("students").insert({
       first_name,
       last_name,
       tz,
-      grade_level_id,
+      cohort_id,
+      academic_year_id: year.id,
       class_id,
       specialization_id,
       track_id,
@@ -55,7 +64,9 @@ export default async function NewStudentPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">הוספת תלמידה</h1>
-          <p className="mt-1 text-sm text-zinc-600">בחירה מתוך רשימות בלבד — ניתן לערוך רשימות ב&quot;הגדרות&quot;</p>
+          <p className="mt-1 text-sm text-zinc-600">
+            שנת לימודים: <span className="font-medium">{activeYear.name}</span> · השכבה נקבעת אוטומטית לפי המחזור
+          </p>
         </div>
         <Link
           href="/students"
@@ -64,7 +75,6 @@ export default async function NewStudentPage() {
           חזרה
         </Link>
       </div>
-
       <form
         action={createStudent}
         className="grid gap-4 rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-md md:grid-cols-2"
@@ -73,12 +83,7 @@ export default async function NewStudentPage() {
         <Field name="last_name" label="שם משפחה" required />
         <Field name="tz" label="ת״ז" required dir="ltr" />
 
-        <SelectLookup
-          name="grade_level_id"
-          label="שכבה"
-          required
-          options={gl.data ?? []}
-        />
+        <SelectLookup name="cohort_id" label="מחזור" required options={cohortItems} />
         <SelectLookup name="class_id" label="כיתה" required options={cl.data ?? []} />
         <SelectLookup
           name="specialization_id"

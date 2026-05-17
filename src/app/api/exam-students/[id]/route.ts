@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { writeAudit } from "@/lib/audit/log";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import type { ExamStudentStatus } from "@/lib/types/db";
+import { assertValidExamStudentStatusTransition } from "@/lib/validations/exams";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +17,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const supabase = createSupabaseAdminClient();
+  const user = await getCurrentUser(supabase);
+
+  const transition = await assertValidExamStudentStatusTransition(supabase, id, status);
+  if (!transition.ok) return NextResponse.json({ error: transition.error }, { status: 400 });
 
   const { data: row, error: gErr } = await supabase
     .from("exam_students")
-    .select("id, exam_id, student_id")
+    .select("id, exam_id, student_id, status")
     .eq("id", id)
     .single();
 
@@ -56,5 +63,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .single();
 
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 400 });
+
+  await writeAudit(supabase, {
+    userId: user?.id ?? null,
+    entityType: "exam_student",
+    entityId: id,
+    actionType: "status_change",
+    oldValue: { status: row.status },
+    newValue: { status: nextStatus },
+  });
+
   return NextResponse.json({ exam_student: updated });
 }

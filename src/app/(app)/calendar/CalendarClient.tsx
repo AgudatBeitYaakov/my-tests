@@ -12,12 +12,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListDataCard, ListPageHeader } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { formatHebrewDateTraditional } from "@/lib/hebrewDate";
 
 function fmtLocalDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function formatHebrewCalendar(d: Date): string {
+  return formatHebrewDateTraditional(d);
+}
+
+function parseLocalYmd(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const day = Number(m[3]);
+  if (!y || mo < 1 || mo > 12 || day < 1 || day > 31) return null;
+  return new Date(y, mo - 1, day);
 }
 
 function eventStartYmd(ev: EventInput): string {
@@ -50,7 +65,9 @@ export function CalendarClient() {
   const [rawEvents, setRawEvents] = useState<EventInput[]>([]);
   const [dayExamCount, setDayExamCount] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<EventClickArg | null>(null);
+  const [dayOpen, setDayOpen] = useState<{ date: string; events: EventInput[] } | null>(null);
   const rangeRef = useRef<{ start: string; end: string } | null>(null);
 
   const [fTeacher, setFTeacher] = useState("");
@@ -66,15 +83,17 @@ export function CalendarClient() {
     const e = fmtLocalDate(endInclusive);
     rangeRef.current = { start: s, end: e };
     setLoading(true);
+    setLoadError(null);
     try {
       const r = await fetch(`/api/calendar/exams?start=${encodeURIComponent(s)}&end=${encodeURIComponent(e)}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j as { error?: string }).error ?? "שגיאת טעינה");
       setRawEvents((j as { events: EventInput[] }).events ?? []);
       setDayExamCount((j as { dayExamCount?: Record<string, number> }).dayExamCount ?? {});
-    } catch {
+    } catch (err) {
       setRawEvents([]);
       setDayExamCount({});
+      setLoadError((err as Error).message ?? "שגיאת טעינה");
     } finally {
       setLoading(false);
     }
@@ -90,6 +109,7 @@ export function CalendarClient() {
         );
         const j = await r.json().catch(() => ({}));
         if (r.ok) {
+          setLoadError(null);
           setRawEvents((j as { events: EventInput[] }).events ?? []);
           setDayExamCount((j as { dayExamCount?: Record<string, number> }).dayExamCount ?? {});
         }
@@ -156,7 +176,7 @@ export function CalendarClient() {
     <div className="space-y-8" dir="rtl">
       <ListPageHeader
         title="יומן מבחנים"
-        subtitle="חודש / שבוע / יום · צבעים לפי סטטוס · ריענון כל 30 שניות"
+        subtitle="חודש / שבוע / יום · תאריך עברי בכל יום · צבעים לפי סטטוס · ריענון כל 30 שניות. מוצגים רק מבחנים עם תאריך מבחן — שיבוץ מורה לכיתה/מסלול בלי יצירת מבחן לא מופיע כאן."
         actions={
           <>
             <ExportExcelButton
@@ -167,8 +187,11 @@ export function CalendarClient() {
                 visibleEvents.map((ev) => {
                   const xp = ev.extendedProps as unknown as XProps;
                   const c = xp?.counts;
+                  const ymd = eventStartYmd(ev);
+                  const hd = parseLocalYmd(ymd);
                   return {
-                    תאריך: eventStartYmd(ev),
+                    תאריך: ymd,
+                    תאריך_עברי: hd ? formatHebrewCalendar(hd) : "",
                     מקצוע: xp?.subject ?? "",
                     מורה: xp?.teacherName ?? "",
                     סוג_יעד: xp?.targetTypeLabel ?? xp?.targetType ?? "",
@@ -189,6 +212,11 @@ export function CalendarClient() {
                 <Spinner className="size-4" />
                 טוען אירועים…
               </div>
+            ) : null}
+            {loadError ? (
+              <p className="max-w-md text-sm text-red-600" role="alert">
+                {loadError}
+              </p>
             ) : null}
           </>
         }
@@ -257,6 +285,7 @@ export function CalendarClient() {
 
       <div className="calendar-shell rounded-xl border border-zinc-200 bg-white p-2">
         <FullCalendar
+          key={`${fTeacher}-${fSubject}-${fGrade}-${fClass}-${fSpec}-${fTrack}-${fTone}-${visibleEvents.length}`}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
           initialView="dayGridMonth"
           locale={heLocale}
@@ -270,6 +299,23 @@ export function CalendarClient() {
           buttonText={{ today: "היום" }}
           events={visibleEvents}
           datesSet={onDatesSet}
+          dayHeaderContent={(arg) => (
+            <div className="flex flex-col items-center gap-0.5 py-0.5 leading-tight">
+              <span>{arg.text}</span>
+              <span className="text-[10px] font-normal text-zinc-500">{formatHebrewCalendar(arg.date)}</span>
+            </div>
+          )}
+          dayCellContent={(arg) => (
+            <div className="flex flex-col items-end gap-0.5 leading-tight">
+              <span className="fc-daygrid-day-number">{arg.dayNumberText}</span>
+              <span className="text-[10px] font-normal text-zinc-500">{formatHebrewCalendar(arg.date)}</span>
+            </div>
+          )}
+          dateClick={(info) => {
+            const k = fmtLocalDate(info.date);
+            const dayEvents = visibleEvents.filter((ev) => eventStartYmd(ev) === k);
+            setDayOpen({ date: k, events: dayEvents });
+          }}
           eventClick={(info) => {
             info.jsEvent.preventDefault();
             setDetail(info);
@@ -281,6 +327,44 @@ export function CalendarClient() {
           }}
         />
       </div>
+
+      {dayOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setDayOpen(null)}>
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-zinc-900">מבחנים ב־{dayOpen.date}</h2>
+            {parseLocalYmd(dayOpen.date) ? (
+              <p className="mt-1 text-sm text-zinc-500">{formatHebrewCalendar(parseLocalYmd(dayOpen.date)!)}</p>
+            ) : null}
+            <ul className="mt-4 space-y-2">
+              {dayOpen.events.length ? (
+                dayOpen.events.map((ev) => {
+                  const xp = ev.extendedProps as unknown as XProps;
+                  return (
+                    <li key={String(ev.id)}>
+                      <Link
+                        href={`/exams/${xp.examId}`}
+                        className="block w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
+                        onClick={() => setDayOpen(null)}
+                      >
+                        <span className="font-medium">{xp?.subject}</span>
+                        <span className="text-zinc-600"> · {xp?.teacherName}</span>
+                      </Link>
+                    </li>
+                  );
+                })
+              ) : (
+                <li className="text-sm text-zinc-500">אין מבחנים ביום זה (לפי המסננים)</li>
+              )}
+            </ul>
+            <button type="button" className="mt-4 rounded-lg border border-zinc-300 px-3 py-2 text-sm" onClick={() => setDayOpen(null)}>
+              סגירה
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {detail ? (
         <div
@@ -295,11 +379,14 @@ export function CalendarClient() {
             {(() => {
               const xp = detail.event.extendedProps as unknown as XProps;
               const c = xp.counts;
+              const examD = parseLocalYmd(xp.examDate);
+              const heb = examD ? formatHebrewCalendar(examD) : "";
               return (
                 <>
                   <h2 className="text-lg font-semibold text-zinc-900">{xp.subject}</h2>
                   <p className="mt-1 text-sm text-zinc-600">
                     {xp.teacherName} · {xp.examDate}
+                    {heb ? ` (${heb})` : ""}
                   </p>
                   <p className="mt-2 text-sm text-zinc-700">
                     יעד: {xp.targetTypeLabel} {xp.targetLabel}

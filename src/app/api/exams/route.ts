@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { resolveAcademicYearId } from "@/lib/academic/year";
+import { writeAudit } from "@/lib/audit/log";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 import { assertTeacherAssignmentMatchesExam, fetchStudentIdsForTarget } from "@/lib/exams/logic";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
+import { assertNoDuplicateExam } from "@/lib/validations/exams";
 import type { ExamTargetType } from "@/lib/types/db";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -8,11 +12,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const yearId = await resolveAcademicYearId(supabase);
+  let query = supabase
     .from("exams")
     .select("*, teachers(name)")
     .order("exam_date", { ascending: false })
     .order("created_at", { ascending: false });
+  if (yearId) query = query.eq("academic_year_id", yearId);
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const exams = data ?? [];
@@ -56,6 +63,21 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseAdminClient();
+  const user = await getCurrentUser(supabase);
+  const academicYearId = await resolveAcademicYearId(supabase);
+  if (!academicYearId) {
+    return NextResponse.json({ error: "לא נמצאה שנת לימודים פעילה" }, { status: 400 });
+  }
+
+  const dup = await assertNoDuplicateExam(supabase, {
+    academicYearId,
+    teacherId: teacher_id,
+    subject,
+    targetType: target_type,
+    targetId: target_id,
+    examDate: exam_date,
+  });
+  if (!dup.ok) return NextResponse.json({ error: dup.error }, { status: 400 });
 
   const check = await assertTeacherAssignmentMatchesExam(
     supabase,
@@ -80,6 +102,7 @@ export async function POST(request: Request) {
       exam_date,
       target_type,
       target_id,
+      academic_year_id: academicYearId,
     })
     .select("*")
     .single();
@@ -110,6 +133,14 @@ export async function POST(request: Request) {
     await supabase.from("exams").delete().eq("id", examId);
     return NextResponse.json({ error: esErr.message }, { status: 400 });
   }
+
+  await writeAudit(supabase, {
+    userId: user?.id ?? null,
+    entityType: "exam",
+    entityId: examId,
+    actionType: "create",
+    newValue: { teacher_id, subject, exam_date, target_type, target_id },
+  });
 
   return NextResponse.json({ exam, students_count: studentIds.length });
 }

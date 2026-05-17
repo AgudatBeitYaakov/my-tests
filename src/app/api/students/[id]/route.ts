@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { STUDENT_WITH_LOOKUPS } from "@/lib/db/studentSelect";
+import { enrichStudentsWithGradeForYear } from "@/lib/academic/studentGrade";
+import { resolveAcademicYearId } from "@/lib/academic/year";
+import { writeAudit } from "@/lib/audit/log";
+import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
+import { recordStudentHistoryIfChanged } from "@/lib/students/history";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -8,12 +13,20 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const supabase = createSupabaseAdminClient();
 
+  const studentSelect = await getStudentWithLookupsSelect(supabase);
   const { data: student, error: sErr } = await supabase
     .from("students")
-    .select(STUDENT_WITH_LOOKUPS)
+    .select(studentSelect)
     .eq("id", id)
     .single();
   if (sErr || !student) return NextResponse.json({ error: "לא נמצאה תלמידה" }, { status: 404 });
+
+  const yearId =
+    (student as { academic_year_id?: string }).academic_year_id ??
+    (await resolveAcademicYearId(supabase));
+  const enriched = yearId
+    ? (await enrichStudentsWithGradeForYear(supabase, [student], yearId))[0]
+    : student;
 
   const { data: examStudents } = await supabase
     .from("exam_students")
@@ -73,19 +86,26 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     exam: makeupExamsMeta[m.exam_id] ?? null,
   }));
 
-  return NextResponse.json({ student, exam_students, makeups: makeupsEnriched });
+  return NextResponse.json({ student: enriched, exam_students, makeups: makeupsEnriched });
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const body = (await request.json()) as Record<string, unknown>;
   const supabase = createSupabaseAdminClient();
+  const user = await getCurrentUser(supabase);
+
+  const { data: before } = await supabase
+    .from("students")
+    .select("class_id, specialization_id, track_id, academic_year_id")
+    .eq("id", id)
+    .single();
 
   const patch: Record<string, unknown> = {
     first_name: body.first_name,
     last_name: body.last_name,
     tz: body.tz,
-    grade_level_id: body.grade_level_id,
+    cohort_id: body.cohort_id,
     class_id: body.class_id,
     specialization_id: body.specialization_id === "" ? null : body.specialization_id,
     track_id: body.track_id === "" ? null : body.track_id,
@@ -95,16 +115,54 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .from("students")
     .update(patch)
     .eq("id", id)
-    .select(STUDENT_WITH_LOOKUPS)
+    .select(await getStudentWithLookupsSelect(supabase))
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  if (before && data) {
+    const after = data as {
+      class_id: string;
+      specialization_id: string | null;
+      track_id: string | null;
+      academic_year_id: string | null;
+    };
+    await recordStudentHistoryIfChanged(
+      supabase,
+      id,
+      before as typeof after,
+      after,
+      user?.id ?? null,
+    );
+  }
+
+  await writeAudit(supabase, {
+    userId: user?.id ?? null,
+    entityType: "student",
+    entityId: id,
+    actionType: "update",
+    oldValue: before,
+    newValue: data,
+  });
+
   return NextResponse.json({ student: data });
 }
 
 export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const supabase = createSupabaseAdminClient();
+  const user = await getCurrentUser(supabase);
+
+  const { data: before } = await supabase.from("students").select("*").eq("id", id).single();
   const { error } = await supabase.from("students").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  await writeAudit(supabase, {
+    userId: user?.id ?? null,
+    entityType: "student",
+    entityId: id,
+    actionType: "delete",
+    oldValue: before,
+  });
+
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,10 @@ export type ExamTargetType = "class" | "specialization" | "track";
 export type ExamStudentStatus = "pending" | "took" | "missing" | "makeup" | "completed";
 export type MakeupExamStatus = "open" | "completed";
 
+import type { CohortGrade } from "@/lib/academic/yearCohorts";
+
+export type StudentStatus = "active" | "left" | "graduated";
+
 export type LookupRow = {
   id: string;
   name: string;
@@ -12,15 +16,20 @@ export type Student = {
   first_name: string;
   last_name: string;
   tz: string;
-  grade_level_id: string;
+  cohort_id: string;
+  academic_year_id: string;
   class_id: string;
   specialization_id: string | null;
   track_id: string | null;
+  notes?: string | null;
+  status?: StudentStatus;
   created_at: string;
-  grade_levels?: LookupRow | null;
+  cohorts?: LookupRow | null;
   classes?: LookupRow | null;
   specializations?: LookupRow | null;
   tracks?: LookupRow | null;
+  computed_grade_level?: CohortGrade | null;
+  cohort_name?: string | null;
 };
 
 export type Teacher = {

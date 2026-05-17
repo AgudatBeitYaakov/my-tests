@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatCohortGradeLabel } from "@/lib/academic/studentGrade";
+import { gradeForCohortInYear, loadYearCohortConfig } from "@/lib/academic/yearCohorts";
 import { hasAppSession } from "@/lib/auth/passwordSession";
-import { STUDENT_WITH_LOOKUPS } from "@/lib/db/studentSelect";
+import { cohortLabelFromRow } from "@/lib/cohorts/db";
+import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -10,35 +13,41 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const supabase = createSupabaseAdminClient();
 
+  const { listCohorts } = await import("@/lib/cohorts/db");
+  const studentSelect = await getStudentWithLookupsSelect(supabase);
   const { data: student, error } = await supabase
     .from("students")
-    .select(STUDENT_WITH_LOOKUPS)
+    .select(studentSelect)
     .eq("id", id)
     .single();
   if (error || !student) redirect("/students");
 
-  const [gl, cl, sp, tr] = await Promise.all([
-    supabase.from("grade_levels").select("id,name").order("name", { ascending: true }),
+  const [cohortItems, cl, sp, tr] = await Promise.all([
+    listCohorts(supabase),
     supabase.from("classes").select("id,name").order("name", { ascending: true }),
     supabase.from("specializations").select("id,name").order("name", { ascending: true }),
     supabase.from("tracks").select("id,name").order("name", { ascending: true }),
   ]);
 
-  if (gl.error) throw new Error(gl.error.message);
   if (cl.error) throw new Error(cl.error.message);
   if (sp.error) throw new Error(sp.error.message);
   if (tr.error) throw new Error(tr.error.message);
 
-  const s = student as {
+  const s = student as unknown as {
     id: string;
     first_name: string;
     last_name: string;
     tz: string;
-    grade_level_id: string;
+    cohort_id: string;
+    academic_year_id: string;
     class_id: string;
     specialization_id: string | null;
     track_id: string | null;
+    cohorts?: { id: string; name?: string; cohort_number?: number } | null;
   };
+
+  const yearCfg = s.academic_year_id ? await loadYearCohortConfig(supabase, s.academic_year_id) : null;
+  const computedGrade = yearCfg && s.cohort_id ? gradeForCohortInYear(s.cohort_id, yearCfg) : null;
 
   async function updateStudent(formData: FormData) {
     "use server";
@@ -49,7 +58,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
       first_name: String(formData.get("first_name") ?? "").trim(),
       last_name: String(formData.get("last_name") ?? "").trim(),
       tz: String(formData.get("tz") ?? "").trim(),
-      grade_level_id: String(formData.get("grade_level_id") ?? "").trim(),
+      cohort_id: String(formData.get("cohort_id") ?? "").trim(),
       class_id: String(formData.get("class_id") ?? "").trim(),
       specialization_id: String(formData.get("specialization_id") ?? "").trim() || null,
       track_id: String(formData.get("track_id") ?? "").trim() || null,
@@ -65,7 +74,11 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">עריכת תלמידה</h1>
-          <p className="mt-1 text-sm text-zinc-600">בחירה מתוך רשימות בלבד</p>
+          <p className="mt-1 text-sm text-zinc-600">
+            שכבה נוכחית (לפי מחזור ושנה):{" "}
+            <span className="font-medium">{formatCohortGradeLabel(computedGrade)}</span>
+            {cohortLabelFromRow(s.cohorts) ? ` · מחזור ${cohortLabelFromRow(s.cohorts)}` : null}
+          </p>
         </div>
         <Link
           href={`/students/${id}`}
@@ -84,11 +97,11 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
         <Field name="tz" label="ת״ז" required dir="ltr" defaultValue={s.tz} />
 
         <SelectLookup
-          name="grade_level_id"
-          label="שכבה"
+          name="cohort_id"
+          label="מחזור"
           required
-          options={gl.data ?? []}
-          defaultValue={s.grade_level_id}
+          options={cohortItems}
+          defaultValue={s.cohort_id}
         />
         <SelectLookup name="class_id" label="כיתה" required options={cl.data ?? []} defaultValue={s.class_id} />
         <SelectLookup

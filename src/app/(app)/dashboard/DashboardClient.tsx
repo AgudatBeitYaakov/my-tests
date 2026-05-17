@@ -23,9 +23,11 @@ type Item = {
 
 type Stats = {
   examsTotal: number;
+  examsToday: number;
   examsUpcoming: number;
   makeupsOpen: number;
   studentsTotal: number;
+  studentsInMakeup: number;
   trackingTodo: number;
 };
 
@@ -116,22 +118,14 @@ export function DashboardClient() {
         }
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          title="סה״כ מבחנים"
-          value={stats?.examsTotal ?? 0}
-          hint="כל הזמנים"
-          icon={ClipboardList}
-          href="/exams"
-          staggerIndex={0}
-        />
-        <StatCard
-          title="מבחנים קרובים"
-          value={stats?.examsUpcoming ?? 0}
-          hint="מהיום והלאה"
+          title="מבחנים היום"
+          value={stats?.examsToday ?? 0}
+          hint="תאריך היום"
           icon={CalendarDays}
           href="/calendar"
-          staggerIndex={1}
+          staggerIndex={0}
         />
         <StatCard
           title="השלמות פתוחות"
@@ -139,23 +133,39 @@ export function DashboardClient() {
           hint="דורשות טיפול"
           icon={AlarmClock}
           href="/makeups"
+          staggerIndex={1}
+        />
+        <StatCard
+          title="מעקב ללא ציונים"
+          value={stats?.trackingTodo ?? 0}
+          hint="טרם הוגשו / לא הועבר"
+          icon={Eye}
+          href="/tracking"
           staggerIndex={2}
         />
         <StatCard
-          title="מעקב לטיפול"
-          value={stats?.trackingTodo ?? 0}
-          hint="ללא ציונים / לא הועבר"
-          icon={Eye}
-          href="/tracking"
+          title="תלמידות בהשלמה"
+          value={stats?.studentsInMakeup ?? 0}
+          hint="סטטוס makeup / missing"
+          icon={Users}
+          href="/makeups"
           staggerIndex={3}
+        />
+        <StatCard
+          title="מבחנים קרובים"
+          value={stats?.examsUpcoming ?? 0}
+          hint="מהיום והלאה"
+          icon={ClipboardList}
+          href="/exams"
+          staggerIndex={4}
         />
         <StatCard
           title="תלמידות במערכת"
           value={stats?.studentsTotal ?? 0}
-          hint="רשומות פעילות"
+          hint="שנת לימודים פעילה"
           icon={Users}
           href="/students"
-          staggerIndex={4}
+          staggerIndex={5}
         />
       </section>
 
