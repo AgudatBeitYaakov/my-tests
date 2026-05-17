@@ -4,7 +4,7 @@ import type { ExamTargetType } from "@/lib/types/db";
 export async function assertNoDuplicateExam(
   supabase: SupabaseClient,
   params: {
-    academicYearId: string;
+    cohortId: string;
     teacherId: string;
     subject: string;
     targetType: ExamTargetType;
@@ -16,7 +16,7 @@ export async function assertNoDuplicateExam(
   let q = supabase
     .from("exams")
     .select("id")
-    .eq("academic_year_id", params.academicYearId)
+    .eq("cohort_id", params.cohortId)
     .eq("teacher_id", params.teacherId)
     .eq("subject", params.subject.trim())
     .eq("target_type", params.targetType)

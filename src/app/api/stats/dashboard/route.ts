@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveAcademicYearId } from "@/lib/academic/year";
+import { activeCohortIds } from "@/lib/cohorts/active";
+import { shouldShowArchivedCohorts } from "@/lib/cohorts/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -13,18 +14,31 @@ function todayISODate(): string {
 export async function GET() {
   const supabase = createSupabaseAdminClient();
   const today = todayISODate();
-  const yearId = await resolveAcademicYearId(supabase);
+  const includeArchived = await shouldShowArchivedCohorts();
+  const cohortIds = includeArchived ? null : await activeCohortIds(supabase);
 
   let examsTotalQ = supabase.from("exams").select("id", { count: "exact", head: true });
   let examsTodayQ = supabase.from("exams").select("id", { count: "exact", head: true }).eq("exam_date", today);
   let examsUpcomingQ = supabase.from("exams").select("id", { count: "exact", head: true }).gte("exam_date", today);
   let studentsQ = supabase.from("students").select("id", { count: "exact", head: true });
-  if (yearId) {
-    examsTotalQ = examsTotalQ.eq("academic_year_id", yearId);
-    examsTodayQ = examsTodayQ.eq("academic_year_id", yearId);
-    examsUpcomingQ = examsUpcomingQ.eq("academic_year_id", yearId);
-    studentsQ = studentsQ.eq("academic_year_id", yearId);
+  if (cohortIds?.length) {
+    examsTotalQ = examsTotalQ.in("cohort_id", cohortIds);
+    examsTodayQ = examsTodayQ.in("cohort_id", cohortIds);
+    examsUpcomingQ = examsUpcomingQ.in("cohort_id", cohortIds);
+    studentsQ = studentsQ.in("cohort_id", cohortIds);
   }
+
+  const trackingQ =
+    cohortIds?.length
+      ? supabase
+          .from("exam_tracking")
+          .select("id, exams!inner(cohort_id)", { count: "exact", head: true })
+          .in("exams.cohort_id", cohortIds)
+          .or("grades_submitted.eq.false,transferred_to_system.eq.false")
+      : supabase
+          .from("exam_tracking")
+          .select("id", { count: "exact", head: true })
+          .or("grades_submitted.eq.false,transferred_to_system.eq.false");
 
   const [
     examsTotal,
@@ -39,16 +53,7 @@ export async function GET() {
     examsUpcomingQ,
     supabase.from("makeup_exams").select("id", { count: "exact", head: true }).eq("status", "open"),
     studentsQ,
-    yearId
-      ? supabase
-          .from("exam_tracking")
-          .select("id, exams!inner(academic_year_id)", { count: "exact", head: true })
-          .eq("exams.academic_year_id", yearId)
-          .or("grades_submitted.eq.false,transferred_to_system.eq.false")
-      : supabase
-          .from("exam_tracking")
-          .select("id", { count: "exact", head: true })
-          .or("grades_submitted.eq.false,transferred_to_system.eq.false"),
+    trackingQ,
   ]);
 
   for (const r of [examsTotal, examsToday, examsUpcoming, makeupsOpen, studentsTotal, trackingTodo]) {

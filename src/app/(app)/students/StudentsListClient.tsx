@@ -216,7 +216,7 @@ export function StudentsListClient() {
                     {s.tz}
                   </TableCell>
                   <TableCell>
-                    {formatCohortGradeLabel(s.grade_level)} · מחזור {s.cohort_number}
+                    {formatCohortGradeLabel(s.grade_level)} · מחזור {s.cohort_name ?? "—"}
                   </TableCell>
                   <TableCell>{pickLookupName(s.classes)}</TableCell>
                   <TableCell>{pickLookupName(s.tracks)}</TableCell>

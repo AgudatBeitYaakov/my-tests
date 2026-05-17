@@ -4,7 +4,7 @@ type StudentRow = {
   class_id: string;
   specialization_id: string | null;
   track_id: string | null;
-  academic_year_id: string | null;
+  cohort_id: string | null;
 };
 
 export async function recordStudentHistoryIfChanged(
@@ -23,7 +23,7 @@ export async function recordStudentHistoryIfChanged(
 
   await supabase.from("student_history").insert({
     student_id: studentId,
-    academic_year_id: after.academic_year_id,
+    cohort_id: after.cohort_id,
     old_class_id: before.class_id,
     new_class_id: after.class_id,
     old_specialization_id: before.specialization_id,

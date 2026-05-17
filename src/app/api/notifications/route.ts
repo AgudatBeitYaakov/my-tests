@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveAcademicYearId } from "@/lib/academic/year";
+import { activeCohortIds } from "@/lib/cohorts/active";
+import { shouldShowArchivedCohorts } from "@/lib/cohorts/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -13,28 +14,23 @@ function todayISODate(): string {
 export async function GET() {
   const supabase = createSupabaseAdminClient();
   const today = todayISODate();
-  const yearId = await resolveAcademicYearId(supabase);
+  const includeArchived = await shouldShowArchivedCohorts();
+  const cohortIds = includeArchived ? null : await activeCohortIds(supabase);
 
   let examsTodayQ = supabase.from("exams").select("id", { count: "exact", head: true }).eq("exam_date", today);
-  if (yearId) examsTodayQ = examsTodayQ.eq("academic_year_id", yearId);
+  if (cohortIds?.length) examsTodayQ = examsTodayQ.in("cohort_id", cohortIds);
 
   let trackingQ = supabase
     .from("exam_tracking")
-    .select("id, exam_id, exams!inner(exam_date, academic_year_id)", { count: "exact", head: true })
+    .select("id, exam_id, exams!inner(exam_date, cohort_id)", { count: "exact", head: true })
     .eq("grades_submitted", false)
     .lte("exams.exam_date", today);
+  if (cohortIds?.length) trackingQ = trackingQ.in("exams.cohort_id", cohortIds);
 
   const [examsToday, makeupsOpen, trackingOpen] = await Promise.all([
     examsTodayQ,
     supabase.from("makeup_exams").select("id", { count: "exact", head: true }).eq("status", "open"),
-    yearId
-      ? supabase
-          .from("exam_tracking")
-          .select("id, exams!inner(academic_year_id, exam_date)", { count: "exact", head: true })
-          .eq("grades_submitted", false)
-          .eq("exams.academic_year_id", yearId)
-          .lte("exams.exam_date", today)
-      : trackingQ,
+    trackingQ,
   ]);
 
   const items: { id: string; type: string; message: string; href: string }[] = [];

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { resolveAcademicYearId } from "@/lib/academic/year";
+import { enrichStudentsWithGrade } from "@/lib/academic/studentGrade";
+import { listCohortsForFilter, loadCurrentCohorts } from "@/lib/cohorts/active";
+import { shouldShowArchivedCohorts } from "@/lib/cohorts/server";
 import { asStudentRows } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
-import type { GradeLevel } from "@/lib/students/gradeLevel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -12,34 +13,33 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim();
     const gradeLevel = (searchParams.get("grade_level") ?? searchParams.get("cohort_grade") ?? "").trim();
-    const cohortNumber = (searchParams.get("cohort_number") ?? "").trim();
+    const cohortId = (searchParams.get("cohort_id") ?? "").trim();
     const classId = (searchParams.get("class_id") ?? "").trim();
     const specializationId = (searchParams.get("specialization_id") ?? "").trim();
     const trackId = (searchParams.get("track_id") ?? "").trim();
+    const includeArchived =
+      searchParams.get("include_archived") === "1" || (await shouldShowArchivedCohorts());
 
     const supabase = createSupabaseAdminClient();
-    const yearId = await resolveAcademicYearId(supabase);
-    if (!yearId) {
-      return NextResponse.json({ students: [], error: "לא נבחרה שנת לימודים" }, { status: 400 });
-    }
+    const current = await loadCurrentCohorts(supabase);
 
     const studentSelect = await getStudentWithLookupsSelect();
     let query = supabase
       .from("students")
       .select(studentSelect)
-      .eq("academic_year_id", yearId)
       .order("last_name", { ascending: true })
       .order("first_name", { ascending: true })
-      .limit(300);
+      .limit(500);
 
-    if (gradeLevel === "א" || gradeLevel === "ב" || gradeLevel === "A") {
-      const gl: GradeLevel = gradeLevel === "A" ? "א" : (gradeLevel as GradeLevel);
-      query = query.eq("grade_level", gl);
+    if (!includeArchived) {
+      const ids = [current.cohortA?.id, current.cohortB?.id].filter(Boolean) as string[];
+      if (ids.length) query = query.in("cohort_id", ids);
     }
-    if (cohortNumber) {
-      const n = Number.parseInt(cohortNumber, 10);
-      if (Number.isFinite(n)) query = query.eq("cohort_number", n);
-    }
+
+    const gl = gradeLevel === "A" ? "א" : gradeLevel === "B" ? "ב" : gradeLevel;
+    if (gl === "א" && current.cohortA?.id) query = query.eq("cohort_id", current.cohortA.id);
+    if (gl === "ב" && current.cohortB?.id) query = query.eq("cohort_id", current.cohortB.id);
+    if (cohortId) query = query.eq("cohort_id", cohortId);
     if (classId) query = query.eq("class_id", classId);
     if (specializationId) query = query.eq("specialization_id", specializationId);
     if (trackId) query = query.eq("track_id", trackId);
@@ -47,7 +47,6 @@ export async function GET(request: Request) {
     if (q) {
       const escapeIlike = (s: string) => s.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
       const parts = q.split(/\s+/).filter(Boolean);
-
       if (parts.length >= 2) {
         const p0 = escapeIlike(parts[0]);
         const pRest = escapeIlike(parts.slice(1).join(" "));
@@ -67,7 +66,10 @@ export async function GET(request: Request) {
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ students: asStudentRows(data) });
+    const students = enrichStudentsWithGrade(asStudentRows(data));
+    const cohorts = await listCohortsForFilter(supabase, includeArchived);
+
+    return NextResponse.json({ students, current, cohorts, includeArchived });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message, students: [] }, { status: 500 });
   }

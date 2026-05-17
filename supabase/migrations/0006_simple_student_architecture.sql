@@ -1,5 +1,3 @@
--- ארכיטקטורה פשוטה: שנה + מחזור + שכבה ישירות על students
-
 do $$ begin
   create type public.student_grade_level as enum ('א', 'ב');
 exception when duplicate_object then null;
@@ -8,23 +6,32 @@ end $$;
 alter table public.students add column if not exists cohort_number int;
 alter table public.students add column if not exists grade_level public.student_grade_level;
 
--- מילוי cohort_number מטבלת cohorts
 do $$
 begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'students' and column_name = 'cohort_id'
   ) then
-    update public.students s
-    set cohort_number = coalesce(
-      (select c.cohort_number from public.cohorts c where c.id = s.cohort_id),
-      (select nullif(regexp_replace(c.name, '[^0-9]', '', 'g'), '')::int from public.cohorts c where c.id = s.cohort_id)
-    )
-    where s.cohort_number is null and s.cohort_id is not null;
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'cohorts' and column_name = 'cohort_number'
+    ) then
+      update public.students s
+      set cohort_number = c.cohort_number
+      from public.cohorts c
+      where c.id = s.cohort_id and s.cohort_number is null;
+    elsif exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'cohorts' and column_name = 'name'
+    ) then
+      update public.students s
+      set cohort_number = nullif(regexp_replace(c.name, '[^0-9]', '', 'g'), '')::int
+      from public.cohorts c
+      where c.id = s.cohort_id and s.cohort_number is null;
+    end if;
   end if;
 end $$;
 
--- מילוי grade_level ממיפוי שנה (cohort_a/b או placements)
 do $$
 declare
   has_cols boolean;

@@ -9,7 +9,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   const body = (await request.json()) as {
     subject?: string;
-    grade_level_id?: string;
+    cohort_id?: string;
     target_type?: ExamTargetType;
     target_id?: string;
     active?: boolean;
@@ -17,7 +17,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const patch: Record<string, unknown> = {};
   if (body.subject !== undefined) patch.subject = body.subject.trim();
-  if (body.grade_level_id !== undefined) patch.grade_level_id = body.grade_level_id.trim();
+  if (body.cohort_id !== undefined) patch.cohort_id = body.cohort_id.trim();
   if (body.target_type !== undefined) patch.target_type = body.target_type;
   if (body.target_id !== undefined) patch.target_id = body.target_id.trim();
   if (body.active !== undefined) patch.active = body.active;

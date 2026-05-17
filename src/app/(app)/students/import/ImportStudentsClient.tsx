@@ -11,9 +11,10 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 
 type ImportPlan = {
-  academicYearName: string;
   cohortNumber: number;
   targetGrade: string | null;
+  cohortAName?: string | null;
+  cohortBName?: string | null;
   willImportCount: number;
 };
 
@@ -29,8 +30,6 @@ type PreviewRow = {
   warnings?: string[];
 };
 
-type YearOption = { name: string };
-
 export function ImportStudentsClient() {
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<PreviewRow[] | null>(null);
@@ -38,8 +37,7 @@ export function ImportStudentsClient() {
   const [errorCount, setErrorCount] = useState(0);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [cohortName, setCohortName] = useState("");
-  const [academicYearName, setAcademicYearName] = useState("");
-  const [years, setYears] = useState<YearOption[]>([]);
+  const [activeHint, setActiveHint] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [importErrors, setImportErrors] = useState<{ rowNumber: number; errors: string[] }[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -49,13 +47,17 @@ export function ImportStudentsClient() {
   useEffect(() => {
     void (async () => {
       try {
-        const r = await fetch("/api/academic-years");
+        const r = await fetch("/api/cohorts/current");
         const j = await r.json().catch(() => ({}));
         if (!r.ok) return;
-        const list = (j as { years?: YearOption[] }).years ?? [];
-        setYears(list);
-        const active = list.find((y) => (y as { is_active?: boolean }).is_active) ?? list[0];
-        if (active?.name) setAcademicYearName((prev) => prev.trim() || active.name);
+        const a = (j as { cohortA?: { name: string } | null }).cohortA;
+        const b = (j as { cohortB?: { name: string } | null }).cohortB;
+        const parts = [
+          a ? `מחזור ${a.name} (שכבה א)` : null,
+          b ? `מחזור ${b.name} (שכבה ב)` : null,
+        ].filter(Boolean);
+        if (parts.length) setActiveHint(parts.join(" · "));
+        if (a?.name) setCohortName((prev) => prev.trim() || a.name);
       } catch {
         /* ignore */
       }
@@ -92,12 +94,12 @@ export function ImportStudentsClient() {
     [processFile],
   );
 
-  const yearCohortReady = Boolean(cohortName.trim() && academicYearName.trim());
+  const cohortReady = Boolean(cohortName.trim());
 
   async function openConfirm() {
     if (!rows?.length || validCount === 0) return;
-    if (!yearCohortReady) {
-      setMessage("לפני ייבוא: בחרי שנת לימודים ומחזור יעד");
+    if (!cohortReady) {
+      setMessage("לפני ייבוא: בחרי מחזור יעד");
       return;
     }
     setBusy(true);
@@ -107,7 +109,6 @@ export function ImportStudentsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cohort_number: cohortName.trim(),
-          academic_year_name: academicYearName.trim(),
           valid_count: validCount,
         }),
       });
@@ -144,7 +145,6 @@ export function ImportStudentsClient() {
           rows: payload,
           updateExisting,
           cohort_number: cohortName.trim(),
-          academic_year_name: academicYearName.trim(),
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -169,19 +169,16 @@ export function ImportStudentsClient() {
 
   const planHint = plan
     ? [
-        `שנה: ${plan.academicYearName}`,
         `מחזור ${plan.cohortNumber} → שכבה ${plan.targetGrade ?? "—"}`,
         `ייובאו ${plan.willImportCount} תלמידות`,
       ].join("\n")
     : "";
 
-  const selectedYear = years.find((y) => y.name === academicYearName);
-
   return (
     <div className="space-y-8">
         <ListPageHeader
           title="ייבוא תלמידות מאקסל"
-          subtitle="העלי קובץ Excel. שנה ומחזור נדרשים לאישור הסופי בלבד."
+          subtitle="העלי קובץ Excel. מחזור יעד נדרש לאישור הסופי בלבד."
           actions={
             <>
               <a href="/api/students/import/template" className={LIST_SECONDARY_LINK_CLASS}>
@@ -189,7 +186,7 @@ export function ImportStudentsClient() {
                 תבנית
               </a>
               <Link href="/settings/open-year" className={LIST_SECONDARY_LINK_CLASS}>
-                פתיחת שנה
+                פתיחת שנתון
               </Link>
               <Link href="/students" className={LIST_SECONDARY_LINK_CLASS}>
                 <List className="size-4 shrink-0" strokeWidth={2} />
@@ -221,32 +218,8 @@ export function ImportStudentsClient() {
 
         <div className="grid max-w-lg gap-3 rounded-xl border border-zinc-200 bg-white p-4">
           <p className="text-xs text-zinc-600">
-            {!years.length ? (
-              <>
-                אין שנות לימודים —{" "}
-                <Link href="/settings/open-year" className="underline">
-                  פתחי שנה
-                </Link>
-              </>
-            ) : (
-              "בחרי שנה ומחזור יעד (לפני אישור ייבוא)"
-            )}
+            {activeHint ? `שנתונים פעילים: ${activeHint}` : "בחרי מחזור יעד (לפני אישור ייבוא)"}
           </p>
-          <label className="block text-sm">
-            <span className="font-medium">שנת לימודים</span>
-            <select
-              value={academicYearName}
-              onChange={(e) => setAcademicYearName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2"
-            >
-              <option value="">— בחרי —</option>
-              {years.map((y) => (
-                <option key={y.name} value={y.name}>
-                  {y.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="block text-sm">
             <span className="font-medium">מחזור יעד</span>
             <input
@@ -298,7 +271,7 @@ export function ImportStudentsClient() {
             </Table>
             <button
               type="button"
-              disabled={busy || validCount === 0 || !yearCohortReady}
+              disabled={busy || validCount === 0 || !cohortReady}
               onClick={() => void openConfirm()}
               className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40"
             >

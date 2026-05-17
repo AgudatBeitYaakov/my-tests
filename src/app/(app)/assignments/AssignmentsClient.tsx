@@ -22,18 +22,20 @@ const fetcher = (url: string) => fetch(url).then((r) => {
   return r.json();
 });
 
+type CohortOption = { id: string; name: string; number?: number; grade_level?: string | null };
+
 type AssignmentRow = {
   id: string;
   teacher_id: string;
   subject: string;
-  grade_level_id: string;
+  cohort_id: string;
   target_type: ExamTargetType;
   target_id: string;
   active: boolean;
   target_label?: string;
   target_type_label?: string;
   teachers: { name: string } | null;
-  grade_levels: unknown;
+  cohorts?: CohortOption | null;
 };
 
 type LookupItem = { id: string; name: string };
@@ -46,18 +48,17 @@ const targetStepOptions: { value: ExamTargetType; label: string }[] = [
 
 export function AssignmentsClient() {
   const { data: tData, error: tErr, isLoading: tLoad } = useSWR<{ teachers: Teacher[] }>("/api/teachers", fetcher);
-  const { data: aData, error: aErr, isLoading: aLoad, mutate } = useSWR<{ assignments: AssignmentRow[] }>(
-    "/api/teacher-assignments",
-    fetcher,
-  );
-  const { data: glData } = useSWR<{ items: LookupItem[] }>("/api/lookups/grade-levels", fetcher);
+  const { data: aData, error: aErr, isLoading: aLoad, mutate } = useSWR<{
+    assignments: AssignmentRow[];
+    cohorts?: CohortOption[];
+  }>("/api/teacher-assignments", fetcher);
   const { data: clData } = useSWR<{ items: LookupItem[] }>("/api/lookups/classes", fetcher);
   const { data: spData } = useSWR<{ items: LookupItem[] }>("/api/lookups/specializations", fetcher);
   const { data: trData } = useSWR<{ items: LookupItem[] }>("/api/lookups/tracks", fetcher);
 
   const [teacherId, setTeacherId] = useState("");
   const [subject, setSubject] = useState("");
-  const [gradeLevelId, setGradeLevelId] = useState("");
+  const [cohortId, setCohortId] = useState("");
   const [targetKind, setTargetKind] = useState<ExamTargetType>("class");
   const [targetId, setTargetId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -71,7 +72,7 @@ export function AssignmentsClient() {
   async function addAssignment(e: React.FormEvent) {
     e.preventDefault();
     if (!teacherId) return alert("בחרי מורה");
-    if (!gradeLevelId) return alert("בחרי שכבה");
+    if (!cohortId) return alert("בחרי שנתון");
     if (!targetId) return alert("בחרי יעד לשיבוץ");
     setSaving(true);
     try {
@@ -81,7 +82,7 @@ export function AssignmentsClient() {
         body: JSON.stringify({
           teacher_id: teacherId,
           subject,
-          grade_level_id: gradeLevelId,
+          cohort_id: cohortId,
           target_type: targetKind,
           target_id: targetId,
         }),
@@ -89,7 +90,7 @@ export function AssignmentsClient() {
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j as { error?: string }).error ?? "שגיאה");
       setSubject("");
-      setGradeLevelId("");
+      setCohortId("");
       setTargetId("");
       await mutate();
     } catch (err) {
@@ -124,7 +125,6 @@ export function AssignmentsClient() {
     await mutate();
   }
 
-  const gradeLevels = glData?.items ?? [];
   const rows = aData?.assignments ?? [];
 
   return (
@@ -193,13 +193,23 @@ export function AssignmentsClient() {
           />
         </label>
 
-        <LookupSelect
-          label="שכבה *"
-          value={gradeLevelId}
-          onChange={setGradeLevelId}
-          items={gradeLevels}
-          required
-        />
+        <label className="block">
+          <span className="text-sm font-medium text-zinc-700">שנתון *</span>
+          <select
+            required
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            value={cohortId}
+            onChange={(e) => setCohortId(e.target.value)}
+          >
+            <option value="">— בחרי —</option>
+            {(aData?.cohorts ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                מחזור {c.name ?? c.number}
+                {c.grade_level ? ` — שכבה ${c.grade_level}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <fieldset className="md:col-span-2 lg:col-span-3">
           <legend className="text-sm font-medium text-zinc-700">שלב 1 — סוג שיבוץ (אחד בלבד)</legend>
@@ -270,7 +280,7 @@ export function AssignmentsClient() {
               <TableHead>מקצוע</TableHead>
               <TableHead>סוג שיבוץ</TableHead>
               <TableHead>ערך שיבוץ</TableHead>
-              <TableHead>שכבה</TableHead>
+              <TableHead>שנתון</TableHead>
               <TableHead>פעיל</TableHead>
               <TableHead className="w-[1%] whitespace-nowrap" />
             </TableRow>
@@ -283,7 +293,11 @@ export function AssignmentsClient() {
                   <TableCell>{a.subject}</TableCell>
                   <TableCell className="text-slate-600 dark:text-zinc-300">{a.target_type_label ?? a.target_type}</TableCell>
                   <TableCell className="text-slate-800 dark:text-zinc-200">{a.target_label ?? a.target_id}</TableCell>
-                  <TableCell>{pickLookupName(a.grade_levels)}</TableCell>
+                  <TableCell>
+                    {a.cohorts
+                      ? `מחזור ${a.cohorts.name ?? a.cohorts.number ?? ""}${a.cohorts.grade_level ? ` · ${a.cohorts.grade_level}` : ""}`
+                      : "—"}
+                  </TableCell>
                   <TableCell>
                     <button
                       type="button"

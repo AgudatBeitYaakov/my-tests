@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeAudit } from "@/lib/audit/log";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { enrichStudentsWithGradeForYear } from "@/lib/academic/studentGrade";
 import { asStudentRow } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { recordStudentHistoryIfChanged } from "@/lib/students/history";
@@ -21,6 +22,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (sErr || !student) return NextResponse.json({ error: "לא נמצאה תלמידה" }, { status: 404 });
 
   const row = asStudentRow(student);
+  const enriched = (await enrichStudentsWithGradeForYear(supabase, [row]))[0];
 
   const { data: examStudents } = await supabase
     .from("exam_students")
@@ -80,7 +82,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     exam: makeupExamsMeta[m.exam_id] ?? null,
   }));
 
-  return NextResponse.json({ student: row, exam_students, makeups: makeupsEnriched });
+  return NextResponse.json({ student: enriched, exam_students, makeups: makeupsEnriched });
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -91,7 +93,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: before } = await supabase
     .from("students")
-    .select("class_id, specialization_id, track_id, academic_year_id")
+    .select("class_id, specialization_id, track_id, cohort_id")
     .eq("id", id)
     .single();
 
@@ -118,7 +120,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     await recordStudentHistoryIfChanged(
       supabase,
       id,
-      before as Pick<typeof after, "class_id" | "specialization_id" | "track_id" | "academic_year_id">,
+      before as Pick<typeof after, "class_id" | "specialization_id" | "track_id" | "cohort_id">,
       after,
       user?.id ?? null,
     );

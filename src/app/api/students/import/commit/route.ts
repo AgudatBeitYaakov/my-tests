@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { setAcademicYearCookie } from "@/lib/academic/year";
-import { resolveImportTarget } from "@/lib/students/importTarget";
+import { resolveImportTarget } from "@/lib/cohorts/import";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   validateImportRows,
@@ -14,7 +13,6 @@ type CommitBody = {
   rows?: ParsedImportRow[];
   updateExisting?: boolean;
   cohort_number?: string | number;
-  academic_year_name?: string;
 };
 
 export async function POST(request: Request) {
@@ -22,18 +20,13 @@ export async function POST(request: Request) {
   const rowsIn = body.rows ?? [];
   const updateExisting = Boolean(body.updateExisting);
   const cohortInput = String(body.cohort_number ?? "").trim();
-  const academicYearName = (body.academic_year_name ?? "").trim();
 
   if (!rowsIn.length) return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
-  if (!cohortInput || !academicYearName) {
-    return NextResponse.json({ error: "חובה מחזור ושנת לימודים" }, { status: 400 });
-  }
+  if (!cohortInput) return NextResponse.json({ error: "חובה לבחור מחזור" }, { status: 400 });
 
   const supabase = createSupabaseAdminClient();
-  const target = await resolveImportTarget(supabase, academicYearName, cohortInput);
+  const target = await resolveImportTarget(supabase, cohortInput);
   if (target.error) return NextResponse.json({ error: target.error }, { status: 400 });
-
-  await setAcademicYearCookie(target.yearId);
 
   const [cl, sp, tr] = await Promise.all([
     supabase.from("classes").select("id,name"),
@@ -75,9 +68,7 @@ export async function POST(request: Request) {
       class_id: r.resolved.class_id,
       specialization_id: r.resolved.specialization_id,
       track_id: r.resolved.track_id,
-      cohort_number: target.cohortNumber,
-      grade_level: target.grade,
-      academic_year_id: target.yearId,
+      cohort_id: target.cohortId,
       status: "active",
     };
     const id = tzToId.get(r.tz.trim());
@@ -125,8 +116,7 @@ export async function POST(request: Request) {
     failed: rowErrors.length,
     skipped: rowsIn.length - good.length - inserted - updated,
     errors: rowErrors,
-    academic_year_id: target.yearId,
-    cohort_number: target.cohortNumber,
+    cohort_id: target.cohortId,
     grade: target.grade,
   });
 }

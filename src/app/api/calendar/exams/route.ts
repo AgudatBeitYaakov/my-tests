@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resolveAcademicYearId } from "@/lib/academic/year";
+import { activeCohortIds } from "@/lib/cohorts/active";
+import { shouldShowArchivedCohorts } from "@/lib/cohorts/server";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import type { ExamTargetType } from "@/lib/types/db";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -72,14 +73,15 @@ export async function GET(request: Request) {
   }
 
   const supabase = createSupabaseAdminClient();
-  const yearId = await resolveAcademicYearId(supabase);
+  const includeArchived = await shouldShowArchivedCohorts();
+  const cohortIds = includeArchived ? null : await activeCohortIds(supabase);
 
   let examsQuery = supabase
     .from("exams")
     .select("id, subject, exam_date, target_type, target_id, teacher_id, teachers(name)")
     .gte("exam_date", start)
     .lte("exam_date", end);
-  if (yearId) examsQuery = examsQuery.eq("academic_year_id", yearId);
+  if (cohortIds?.length) examsQuery = examsQuery.in("cohort_id", cohortIds);
 
   const { data: examsRaw, error: eErr } = await examsQuery;
 

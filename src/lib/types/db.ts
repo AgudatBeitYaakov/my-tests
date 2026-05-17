@@ -1,5 +1,6 @@
-import type { GradeLevel } from "@/lib/students/gradeLevel";
+import type { GradeLevel } from "@/lib/cohorts/active";
 
+export type { GradeLevel };
 export type ExamTargetType = "class" | "specialization" | "track";
 export type ExamStudentStatus = "pending" | "took" | "missing" | "makeup" | "completed";
 export type MakeupExamStatus = "open" | "completed";
@@ -15,18 +16,19 @@ export type Student = {
   first_name: string;
   last_name: string;
   tz: string;
-  cohort_number: number;
-  grade_level: GradeLevel;
-  academic_year_id: string;
+  cohort_id: string;
   class_id: string;
   specialization_id: string | null;
   track_id: string | null;
   notes?: string | null;
   status?: StudentStatus;
   created_at: string;
+  cohorts?: { id: string; number?: number; name?: string; grade_level?: GradeLevel | null } | null;
   classes?: LookupRow | null;
   specializations?: LookupRow | null;
   tracks?: LookupRow | null;
+  grade_level?: GradeLevel | null;
+  cohort_name?: string | null;
 };
 
 export type Teacher = {
@@ -39,11 +41,12 @@ export type TeacherAssignment = {
   id: string;
   teacher_id: string;
   subject: string;
-  academic_year_id: string;
+  cohort_id: string;
   target_type: ExamTargetType;
   target_id: string;
   active: boolean;
   teachers?: { name: string } | null;
+  cohorts?: { id: string; name?: string; number?: number; grade_level?: GradeLevel | null } | null;
 };
 
 export type Exam = {
@@ -53,7 +56,15 @@ export type Exam = {
   exam_date: string;
   target_type: ExamTargetType;
   target_id: string;
+  cohort_id?: string;
   created_at: string;
+};
+
+export type AppUser = {
+  id: string;
+  username: string;
+  full_name: string;
+  active: boolean;
 };
 
 export type ExamStudent = {
@@ -85,11 +96,4 @@ export type ExamTracking = {
   transferred_to_system: boolean;
   photocopied: boolean;
   notes: string | null;
-};
-
-export type AppUser = {
-  id: string;
-  username: string;
-  full_name: string;
-  active: boolean;
 };

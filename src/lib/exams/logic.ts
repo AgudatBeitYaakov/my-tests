@@ -5,6 +5,7 @@ export async function fetchStudentIdsForTarget(
   supabase: SupabaseClient,
   targetType: ExamTargetType,
   targetId: string,
+  cohortId?: string,
 ): Promise<{ ids: string[]; error: string | null }> {
   const col =
     targetType === "class"
@@ -13,19 +14,22 @@ export async function fetchStudentIdsForTarget(
         ? "specialization_id"
         : "track_id";
 
-  const { data, error } = await supabase.from("students").select("id").eq(col, targetId);
+  let q = supabase.from("students").select("id").eq(col, targetId);
+  if (cohortId) q = q.eq("cohort_id", cohortId);
+
+  const { data, error } = await q;
 
   if (error) return { ids: [], error: error.message };
   return { ids: (data ?? []).map((r) => r.id as string), error: null };
 }
 
-/** שיבוץ פעיל שמקשר מורה + מקצוע + אותו יעד כמו המבחן */
 export async function assertTeacherAssignmentMatchesExam(
   supabase: SupabaseClient,
   teacherId: string,
   subject: string,
   targetType: ExamTargetType,
   targetId: string,
+  cohortId: string,
 ): Promise<{ ok: boolean; error: string | null }> {
   const { data, error } = await supabase
     .from("teacher_assignments")
@@ -34,6 +38,7 @@ export async function assertTeacherAssignmentMatchesExam(
     .eq("subject", subject)
     .eq("target_type", targetType)
     .eq("target_id", targetId)
+    .eq("cohort_id", cohortId)
     .eq("active", true)
     .limit(1);
 
@@ -41,7 +46,7 @@ export async function assertTeacherAssignmentMatchesExam(
   if (!data?.length) {
     return {
       ok: false,
-      error: "אין שיבוץ פעיל למורה במקצוע זה ובאותו יעד (כיתה/התמחות/מסלול)",
+      error: "אין שיבוץ פעיל למורה במקצוע זה, בשנתון ובאותו יעד",
     };
   }
   return { ok: true, error: null };

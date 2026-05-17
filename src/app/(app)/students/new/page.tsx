@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getActiveAcademicYear } from "@/lib/academic/year";
+import { loadCurrentCohorts, cohortLabel } from "@/lib/cohorts/active";
 import { hasAppSession } from "@/lib/auth/passwordSession";
-import { resolveGradeForCohortInYear } from "@/lib/students/gradeLevel";
+import { findCohortByLabel, createCohortByLabel } from "@/lib/cohorts/db";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewStudentPage() {
   const supabase = createSupabaseAdminClient();
-  const activeYear = await getActiveAcademicYear(supabase);
-  if (!activeYear) throw new Error("לא הוגדרה שנת לימודים פעילה");
+  const current = await loadCurrentCohorts(supabase);
 
   const [cl, sp, tr] = await Promise.all([
     supabase.from("classes").select("id,name").order("name"),
@@ -23,18 +22,14 @@ export default async function NewStudentPage() {
     "use server";
     if (!(await hasAppSession())) redirect("/login");
     const sb = createSupabaseAdminClient();
-    const year = await getActiveAcademicYear(sb);
-    if (!year) throw new Error("לא הוגדרה שנת לימודים פעילה");
-    const cohort_number = Number.parseInt(String(formData.get("cohort_number") ?? ""), 10);
-    if (!Number.isFinite(cohort_number)) throw new Error("מחזור חובה");
-    const grade_level = await resolveGradeForCohortInYear(sb, year.id, cohort_number);
+    const cohortInput = String(formData.get("cohort_number") ?? "").trim();
+    let cohort = await findCohortByLabel(sb, cohortInput);
+    if (!cohort) cohort = await createCohortByLabel(sb, cohortInput);
     const { error } = await sb.from("students").insert({
       first_name: String(formData.get("first_name") ?? "").trim(),
       last_name: String(formData.get("last_name") ?? "").trim(),
       tz: String(formData.get("tz") ?? "").trim(),
-      cohort_number,
-      grade_level,
-      academic_year_id: year.id,
+      cohort_id: cohort.id,
       class_id: String(formData.get("class_id") ?? "").trim(),
       specialization_id: String(formData.get("specialization_id") ?? "").trim() || null,
       track_id: String(formData.get("track_id") ?? "").trim() || null,
@@ -43,46 +38,28 @@ export default async function NewStudentPage() {
     redirect("/students");
   }
 
+  const activeHint = [
+    current.cohortA ? `מחזור ${cohortLabel(current.cohortA)} — שכבה א` : null,
+    current.cohortB ? `מחזור ${cohortLabel(current.cohortB)} — שכבה ב` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">הוספת תלמידה</h1>
-      <p className="text-sm text-zinc-600">שנה: {activeYear.name} · שכבה לפי מחזור</p>
+      <p className="text-sm text-zinc-600">שנתונים פעילים: {activeHint || "לא הוגדרו"}</p>
       <form action={createStudent} className="grid gap-4 rounded-2xl border bg-white p-6 md:grid-cols-2">
-        <Field name="first_name" label="שם פרטי" required />
-        <Field name="last_name" label="שם משפחה" required />
-        <Field name="tz" label="ת״ז" required dir="ltr" />
-        <Field name="cohort_number" label="מחזור" required type="number" />
-        <SelectLookup name="class_id" label="כיתה" required options={cl.data ?? []} />
-        <SelectLookup name="specialization_id" label="התמחות" options={sp.data ?? []} allowEmpty />
-        <SelectLookup name="track_id" label="מסלול" options={tr.data ?? []} allowEmpty />
-        <div className="md:col-span-2 flex justify-end">
-          <button type="submit" className="rounded-xl bg-violet-600 px-5 py-2 text-white">שמירה</button>
-        </div>
+        <label className="block text-sm">שם פרטי<input name="first_name" required className="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label className="block text-sm">שם משפחה<input name="last_name" required className="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label className="block text-sm">ת״ז<input name="tz" required dir="ltr" className="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label className="block text-sm">מחזור<input name="cohort_number" required type="number" min={1} className="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label className="block text-sm">כיתה<select name="class_id" required className="mt-1 w-full border rounded px-2 py-1">{(cl.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <label className="block text-sm">התמחות<select name="specialization_id" className="mt-1 w-full border rounded px-2 py-1"><option value="">—</option>{(sp.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <label className="block text-sm">מסלול<select name="track_id" className="mt-1 w-full border rounded px-2 py-1"><option value="">—</option>{(tr.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+        <div className="md:col-span-2 flex justify-end"><button type="submit" className="rounded-xl bg-violet-600 px-4 py-2 text-white">שמירה</button></div>
       </form>
       <Link href="/students">חזרה</Link>
     </div>
-  );
-}
-
-function Field({ name, label, required, dir, type }: { name: string; label: string; required?: boolean; dir?: string; type?: string }) {
-  return (
-    <label className="block">
-      <div className="text-sm font-medium">{label}</div>
-      <input name={name} required={required} dir={dir} type={type ?? "text"} className="mt-1 w-full rounded-xl border px-3 py-2 text-sm" />
-    </label>
-  );
-}
-
-function SelectLookup({ name, label, required, options, allowEmpty }: { name: string; label: string; required?: boolean; options: { id: string; name: string }[]; allowEmpty?: boolean }) {
-  return (
-    <label className="block">
-      <div className="text-sm font-medium">{label}</div>
-      <select name={name} required={required} className="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
-        {allowEmpty ? <option value="">—</option> : <option value="">בחרי</option>}
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>{o.name}</option>
-        ))}
-      </select>
-    </label>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { formatCohortGradeLabel } from "@/lib/academic/studentGrade";
-import { resolveAcademicYearId } from "@/lib/academic/year";
+import { enrichStudentsWithGrade, formatCohortGradeLabel } from "@/lib/academic/studentGrade";
+import { activeCohortIds } from "@/lib/cohorts/active";
+import { shouldShowArchivedCohorts } from "@/lib/cohorts/server";
 import { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/db/assignmentSelect";
 import { asStudentRows, type StudentWithLookupsRow } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
@@ -92,7 +93,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ kind: stri
 
   try {
     if (kind === "students") {
-      const yearId = await resolveAcademicYearId(supabase);
+      const includeArchived = await shouldShowArchivedCohorts();
+      const cohortIds = includeArchived ? null : await activeCohortIds(supabase);
       const studentSelect = await getStudentWithLookupsSelect();
       const data = await paginateSelect<StudentWithLookupsRow>(async (from, to) => {
         let q = supabase
@@ -101,7 +103,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ kind: stri
           .order("last_name")
           .order("first_name")
           .range(from, to);
-        if (yearId) q = q.eq("academic_year_id", yearId);
+        if (cohortIds?.length) q = q.in("cohort_id", cohortIds);
         const res = await q;
         return {
           data: asStudentRows(res.data),
@@ -109,11 +111,12 @@ export async function GET(_request: Request, ctx: { params: Promise<{ kind: stri
         };
       });
       const rows = asStudentRows(data);
-      const exportRows = rows.map((s) => ({
+      const enriched = enrichStudentsWithGrade(rows);
+      const exportRows = enriched.map((s) => ({
         תעודת_זהות: s.tz,
         שם_פרטי: s.first_name,
         שם_משפחה: s.last_name,
-        מחזור: s.cohort_number,
+        מחזור: s.cohort_name ?? "",
         שכבה: formatCohortGradeLabel(s.grade_level),
         כיתה: pickLookupName(s.classes),
         התמחות: pickLookupName(s.specializations),
@@ -177,20 +180,26 @@ export async function GET(_request: Request, ctx: { params: Promise<{ kind: stri
         target_type: ExamTargetType;
         target_id: string;
         teachers: unknown;
-        grade_levels: unknown;
+        cohorts: { name?: string; number?: number; grade_level?: string | null } | null;
       }[];
       const labels = await resolveExamTargetLabels(
         supabase,
         raw.map((a) => ({ id: a.id, target_type: a.target_type, target_id: a.target_id })),
       );
-      const rows = raw.map((a) => ({
+      const rows = raw.map((a) => {
+        const c = a.cohorts;
+        const cohortLabel = c?.name ?? (c?.number != null ? String(c.number) : "");
+        const grade = c?.grade_level ?? "";
+        return {
         מורה: teacherNameCell(a.teachers),
         מקצוע: a.subject,
-        שכבה: pickLookupName(a.grade_levels),
+        שנתון: cohortLabel,
+        שכבה: grade,
         סוג_שיבוץ: targetTypeHe[a.target_type] ?? a.target_type,
         ערך_שיבוץ: labels[a.id] ?? a.target_id,
         פעיל: a.active ? "כן" : "לא",
-      }));
+      };
+      });
       return NextResponse.json({ rows });
     }
 
