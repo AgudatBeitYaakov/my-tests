@@ -126,11 +126,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     );
   }
 
+  const after = data ? asStudentRow(data) : null;
+  const name = after ? `${after.last_name} ${after.first_name}` : null;
   await writeAudit(supabase, {
     userId: user?.id ?? null,
     entityType: "student",
     entityId: id,
     actionType: "update",
+    entityNameSnapshot: name,
     oldValue: before,
     newValue: data,
   });
@@ -144,14 +147,19 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
   const user = await getCurrentUser(supabase);
 
   const { data: before } = await supabase.from("students").select("*").eq("id", id).single();
-  const { error } = await supabase.from("students").delete().eq("id", id);
+  const { error } = await supabase
+    .from("students")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  const delName = before ? `${before.last_name} ${before.first_name}` : null;
   await writeAudit(supabase, {
     userId: user?.id ?? null,
     entityType: "student",
     entityId: id,
     actionType: "delete",
+    entityNameSnapshot: delName,
     oldValue: before,
   });
 

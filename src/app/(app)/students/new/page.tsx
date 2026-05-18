@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { loadActiveCohortPair, cohortLabel } from "@/lib/cohorts/active";
-import { gradeInPair } from "@/lib/cohorts/grades";
 import { hasAppSession } from "@/lib/auth/passwordSession";
 import { findCohortByLabel, createCohortByLabel } from "@/lib/cohorts/db";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -10,7 +8,6 @@ export const dynamic = "force-dynamic";
 
 export default async function NewStudentPage() {
   const supabase = createSupabaseAdminClient();
-  const current = await loadActiveCohortPair(supabase);
 
   const [cl, sp, tr] = await Promise.all([
     supabase.from("classes").select("id,name").order("name"),
@@ -39,17 +36,10 @@ export default async function NewStudentPage() {
     redirect("/students");
   }
 
-  const activeHint = [
-    current ? `מחזור ${cohortLabel(current.cohortA)} — שכבה ${gradeInPair(current.cohortA.id, current)}` : null,
-    current ? `מחזור ${cohortLabel(current.cohortB)} — שכבה ${gradeInPair(current.cohortB.id, current)}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">הוספת תלמידה</h1>
-      <p className="text-sm text-zinc-600">שנתונים פעילים: {activeHint || "לא הוגדרו"}</p>
+      <p className="text-sm text-zinc-600">בחרי מחזור יעד — שכבה א/ב מחושבת בשרת לפי זוג המחזורים הפעיל</p>
       <form action={createStudent} className="grid gap-4 rounded-2xl border bg-white p-6 md:grid-cols-2">
         <label className="block text-sm">שם פרטי<input name="first_name" required className="mt-1 w-full border rounded px-2 py-1" /></label>
         <label className="block text-sm">שם משפחה<input name="last_name" required className="mt-1 w-full border rounded px-2 py-1" /></label>

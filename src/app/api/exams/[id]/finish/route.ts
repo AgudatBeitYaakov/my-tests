@@ -3,10 +3,20 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-/** יוצר רשומות השלמה לכל תלמידה במצב missing שלא קיימת לה השלמה פתוחה */
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: examId } = await ctx.params;
   const supabase = createSupabaseAdminClient();
+
+  const { data: exam, error: examErr } = await supabase
+    .from("exams")
+    .select("id, makeup_locked_at")
+    .eq("id", examId)
+    .maybeSingle();
+  if (examErr) return NextResponse.json({ error: examErr.message }, { status: 500 });
+  if (!exam) return NextResponse.json({ error: "מבחן לא נמצא" }, { status: 404 });
+  if (exam.makeup_locked_at) {
+    return NextResponse.json({ error: "המבחן כבר ננעל להשלמות" }, { status: 400 });
+  }
 
   const { data: missingRows, error: qErr } = await supabase
     .from("exam_students")
@@ -43,5 +53,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 400 });
 
-  return NextResponse.json({ created: studentIds.length });
+  const now = new Date().toISOString();
+  const { error: lockErr } = await supabase
+    .from("exams")
+    .update({ makeup_locked_at: now })
+    .eq("id", examId);
+  if (lockErr) return NextResponse.json({ error: lockErr.message }, { status: 400 });
+
+  return NextResponse.json({ created: studentIds.length, locked: true });
 }

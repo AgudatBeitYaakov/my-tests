@@ -13,6 +13,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     .from("exams")
     .select("*, teachers(name)")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (eErr || !exam) return NextResponse.json({ error: "מבחן לא נמצא" }, { status: 404 });

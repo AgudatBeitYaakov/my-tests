@@ -163,8 +163,11 @@ export async function GET(request: Request) {
   }
 
   const dayExamCount = new Map<string, number>();
+  const teacherDayCount = new Map<string, number>();
   for (const e of exams) {
     dayExamCount.set(e.exam_date, (dayExamCount.get(e.exam_date) ?? 0) + 1);
+    const tk = `${e.exam_date}|${e.teacher_id}`;
+    teacherDayCount.set(tk, (teacherDayCount.get(tk) ?? 0) + 1);
   }
 
   const events = exams.map((e) => {
@@ -178,6 +181,7 @@ export async function GET(request: Request) {
     const gradeLevelName = cohort ? gradeForCohort(cohort) : null;
     const classConflict =
       e.target_type === "class" && (classDayCount.get(classDayKey(e.exam_date, e.target_id)) ?? 0) > 1;
+    const teacherOverlap = (teacherDayCount.get(`${e.exam_date}|${e.teacher_id}`) ?? 0) > 1;
     const dayLoad = dayExamCount.get(e.exam_date) ?? 0;
 
     const targetTypeHe: Record<string, string> = {
@@ -210,6 +214,7 @@ export async function GET(request: Request) {
         counts: c,
         tone: cols.tone,
         classConflict,
+        teacherOverlap,
         dayExamCount: dayLoad,
         heavyDay: dayLoad > 5,
         tracking: tr,

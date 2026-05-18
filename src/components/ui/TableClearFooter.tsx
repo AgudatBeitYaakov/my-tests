@@ -35,35 +35,43 @@ export function TableClearFooter({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
+  const [scopeSummaryText, setScopeSummaryText] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !scopePreviewPath) {
       setScopePreview(null);
+      setScopeSummaryText(null);
       return;
     }
     void (async () => {
       try {
         const r = await fetch(scopePreviewPath);
         const j = await r.json();
-        if (r.ok) setScopePreview((j as { preview: ScopePreview }).preview ?? null);
+        if (r.ok) {
+          setScopePreview((j as { preview: ScopePreview }).preview ?? null);
+          setScopeSummaryText((j as { summaryText?: string }).summaryText ?? null);
+        }
       } catch {
         setScopePreview(null);
+        setScopeSummaryText(null);
       }
     })();
   }, [open, scopePreviewPath]);
 
-  const scopeHint = scopePreview
-    ? [
-        `בזוג המחזורים הנבחר יימחקו:`,
-        scopePreview.students ? `• ${scopePreview.students} תלמידות` : null,
-        scopePreview.exams ? `• ${scopePreview.exams} מבחנים` : null,
-        scopePreview.assignments ? `• ${scopePreview.assignments} שיבוצים` : null,
-        scopePreview.makeups ? `• ${scopePreview.makeups} השלמות` : null,
-        `ובמסך זה: ${count} רשומות מ«${label}».`,
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : null;
+  const scopeHint = scopeSummaryText
+    ? `${scopeSummaryText}\nובמסך זה: ${count} רשומות מ«${label}».`
+    : scopePreview
+      ? [
+          `בזוג המחזורים הנבחר יימחקו:`,
+          scopePreview.students ? `• ${scopePreview.students} תלמידות` : null,
+          scopePreview.exams ? `• ${scopePreview.exams} מבחנים` : null,
+          scopePreview.assignments ? `• ${scopePreview.assignments} שיבוצים` : null,
+          scopePreview.makeups ? `• ${scopePreview.makeups} השלמות` : null,
+          `ובמסך זה: ${count} רשומות מ«${label}».`,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : null;
 
   async function runDelete() {
     if (count === 0) return;

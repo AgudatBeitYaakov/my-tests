@@ -56,6 +56,7 @@ type XProps = {
   counts: { total: number; took: number; missing: number; makeup: number; completed: number; pending: number };
   tone: string;
   classConflict: boolean;
+  teacherOverlap: boolean;
   dayExamCount: number;
   heavyDay: boolean;
 };
@@ -280,6 +281,9 @@ export function CalendarClient() {
         <span className="inline-flex items-center gap-1">
           <span className="size-2 rounded-full bg-orange-300" /> עומס יום (&gt;5)
         </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="size-2 rounded-full bg-fuchsia-300" /> מורה — 2+ מבחנים באותו יום
+        </span>
       </div>
 
       <div className="calendar-shell rounded-xl border border-zinc-200 bg-white p-2">
@@ -399,6 +403,11 @@ export function CalendarClient() {
                   {xp.classConflict ? (
                     <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-xs text-amber-900">
                       ייתכן עומס מבחנים לכיתה — יותר ממבחן אחד לאותה כיתה באותו יום
+                    </p>
+                  ) : null}
+                  {xp.teacherOverlap ? (
+                    <p className="mt-3 rounded-md border border-fuchsia-300 bg-fuchsia-50 px-2 py-2 text-xs text-fuchsia-900">
+                      למורה זו יש יותר ממבחן אחד באותו יום
                     </p>
                   ) : null}
                   <div className="mt-4 flex flex-wrap gap-2">

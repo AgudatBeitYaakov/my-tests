@@ -58,6 +58,38 @@ function normalizeHeaderKey(k: string): string {
   return t;
 }
 
+export type ColumnMap = Partial<Record<keyof Omit<ParsedImportRow, "rowNumber">, string>>;
+
+function findCell(row: Record<string, unknown>, header: string): unknown {
+  if (header in row) return row[header];
+  const nk = normalizeHeaderKey(header);
+  for (const [k, v] of Object.entries(row)) {
+    if (normalizeHeaderKey(k) === nk) return v;
+  }
+  return undefined;
+}
+
+/** ממפה עמודות אקסל לשמות שדות מערכת לפני ולידציה */
+export function applyColumnMap(
+  raw: Record<string, unknown>[],
+  map: ColumnMap,
+): Record<string, unknown>[] {
+  if (!Object.keys(map).length) return raw;
+  return raw.map((row) => {
+    const out: Record<string, unknown> = { ...row };
+    for (const field of REQUIRED_FIELDS) {
+      const src = map[field]?.trim();
+      if (!src) continue;
+      const val = findCell(row, src);
+      if (val !== undefined) {
+        const canonical = FIELD_ALIASES[field][0];
+        out[canonical] = val;
+      }
+    }
+    return out;
+  });
+}
+
 export function assertRequiredHeaders(rawKeys: string[]): string | null {
   const nk = new Set(rawKeys.map((k) => normalizeHeaderKey(k)).filter(Boolean));
   const missing: string[] = [];

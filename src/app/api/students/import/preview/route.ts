@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
+  applyColumnMap,
   assertRequiredHeaders,
   filterDataRows,
   sheetRowsToObjects,
+  type ColumnMap,
   validateImportRows,
   type ValidatedImportRow,
 } from "@/lib/students/excelImport";
@@ -37,11 +39,37 @@ export async function POST(request: Request) {
 
   const sheet = wb.Sheets[sheetName];
   const rawAll = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-  const raw = filterDataRows(rawAll);
+  let raw = filterDataRows(rawAll);
   if (!raw.length) return NextResponse.json({ error: "אין שורות נתונים בגיליון" }, { status: 400 });
 
-  const headerErr = assertRequiredHeaders(Object.keys(raw[0] ?? {}));
-  if (headerErr) return NextResponse.json({ error: headerErr }, { status: 400 });
+  const mapRaw = form.get("column_map");
+  let columnMap: ColumnMap = {};
+  if (typeof mapRaw === "string" && mapRaw.trim()) {
+    try {
+      columnMap = JSON.parse(mapRaw) as ColumnMap;
+      raw = applyColumnMap(raw, columnMap);
+    } catch {
+      return NextResponse.json({ error: "מיפוי עמודות לא תקין" }, { status: 400 });
+    }
+  }
+
+  const headers = Object.keys(raw[0] ?? {});
+  const headerErr = assertRequiredHeaders(headers);
+  if (headerErr) {
+    return NextResponse.json({
+      error: headerErr,
+      headers,
+      needMapping: true,
+      fieldLabels: {
+        first_name: "שם פרטי",
+        last_name: "שם משפחה",
+        tz: "תעודת זהות",
+        class_name: "כיתה",
+        specialization: "התמחות",
+        track: "מסלול",
+      },
+    }, { status: 400 });
+  }
 
   const supabase = createSupabaseAdminClient();
   const [cl, sp, tr, tzRes] = await Promise.all([
@@ -73,6 +101,19 @@ export async function POST(request: Request) {
 
   const validCount = rows.filter((r) => r.errors.length === 0).length;
   const errorCount = rows.filter((r) => r.errors.length > 0).length;
+  const duplicateTz = rows.filter(
+    (r) => r.errors.length === 0 && r.tz && existingTz.has(r.tz.trim()),
+  ).length;
+  const newCount = rows.filter(
+    (r) => r.errors.length === 0 && r.tz && !existingTz.has(r.tz.trim()),
+  ).length;
 
-  return NextResponse.json({ rows, validCount, errorCount });
+  return NextResponse.json({
+    rows,
+    validCount,
+    errorCount,
+    summary: { newCount, updateCount: duplicateTz, duplicateTz, errorCount, validCount },
+    headers,
+    columnMap,
+  });
 }

@@ -154,6 +154,7 @@ create table public.exams (
   target_type public.exam_target_type not null,
   target_id uuid not null,
   notes text,
+  makeup_locked_at timestamptz,
   created_at timestamptz not null default now(),
   deleted_at timestamptz
 );
@@ -171,6 +172,9 @@ create table public.exam_students (
   track_snapshot text,
   specialization_snapshot text,
   teacher_snapshot text,
+  subject_snapshot text,
+  cohort_number_snapshot text,
+  target_name_snapshot text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (exam_id, student_id)
@@ -229,6 +233,17 @@ create table public.audit_logs (
   new_value jsonb,
   ip_address text,
   user_agent text,
+  entity_name_snapshot text,
+  created_at timestamptz not null default now()
+);
+
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users (id) on delete set null,
+  title text not null,
+  body text,
+  href text,
+  read_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -343,8 +358,14 @@ create index idx_makeup_status on public.makeup_exams (status);
 create index idx_exam_tracking_deleted on public.exam_tracking (deleted_at) where deleted_at is null;
 create index idx_audit_entity on public.audit_logs (entity_type, entity_id);
 create index idx_student_history_student on public.student_history (student_id, changed_at desc);
+create index idx_notifications_user_unread on public.notifications (user_id, created_at desc) where read_at is null;
+
+create extension if not exists pg_trgm;
+create index idx_students_full_name_trgm on public.students using gin (full_name_generated gin_trgm_ops);
+create index idx_teachers_name_trgm on public.teachers using gin (name gin_trgm_ops);
 
 alter table public.system_settings enable row level security;
+alter table public.notifications enable row level security;
 alter table public.cohorts enable row level security;
 alter table public.classes enable row level security;
 alter table public.specializations enable row level security;

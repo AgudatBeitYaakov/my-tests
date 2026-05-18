@@ -8,6 +8,14 @@ export type ScopedDeletePreview = {
   makeups: number;
 };
 
+export type CohortDeleteBreakdown = {
+  cohortId: string;
+  cohortNumber: number;
+  students: number;
+  exams: number;
+  assignments: number;
+};
+
 export async function previewScopedDeletes(
   supabase: SupabaseClient,
   cohortIds: string[],
@@ -43,6 +51,48 @@ export async function previewScopedDeletes(
     assignments: assignments.count ?? 0,
     makeups: makeups.count ?? 0,
   };
+}
+
+export async function previewScopedDeletesDetailed(
+  supabase: SupabaseClient,
+  cohortIds: string[],
+): Promise<{ preview: ScopedDeletePreview; byCohort: CohortDeleteBreakdown[] }> {
+  const preview = await previewScopedDeletes(supabase, cohortIds);
+  if (!cohortIds.length) return { preview, byCohort: [] };
+
+  const { data: cohorts } = await supabase
+    .from("cohorts")
+    .select("id, number")
+    .in("id", cohortIds)
+    .order("number", { ascending: false });
+
+  const byCohort: CohortDeleteBreakdown[] = [];
+  for (const c of cohorts ?? []) {
+    const cid = c.id as string;
+    const [st, ex, asg] = await Promise.all([
+      notDeleted(supabase.from("students").select("id", { count: "exact", head: true })).eq(
+        "cohort_id",
+        cid,
+      ),
+      notDeleted(supabase.from("exams").select("id", { count: "exact", head: true })).eq(
+        "cohort_id",
+        cid,
+      ),
+      notDeleted(supabase.from("teacher_assignments").select("id", { count: "exact", head: true })).eq(
+        "cohort_id",
+        cid,
+      ),
+    ]);
+    byCohort.push({
+      cohortId: cid,
+      cohortNumber: Number(c.number),
+      students: st.count ?? 0,
+      exams: ex.count ?? 0,
+      assignments: asg.count ?? 0,
+    });
+  }
+
+  return { preview, byCohort };
 }
 
 export async function softDeleteStudentsInCohorts(
@@ -91,13 +141,13 @@ export async function softDeleteMakeupsInCohorts(
   cohortIds: string[],
 ): Promise<number> {
   if (!cohortIds.length) return 0;
+  const now = new Date().toISOString();
   const { data: examRows } = await notDeleted(supabase.from("exams").select("id")).in(
     "cohort_id",
     cohortIds,
   );
   const examIds = (examRows ?? []).map((r) => r.id as string);
   if (!examIds.length) return 0;
-  const now = new Date().toISOString();
   const { data, error } = await notDeleted(supabase.from("makeup_exams").update({ deleted_at: now }))
     .in("exam_id", examIds)
     .select("id");

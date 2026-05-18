@@ -38,6 +38,7 @@ const nav: NavItem[] = [
   { href: "/tracking", label: "מעקב", icon: Eye, iconClass: "text-teal-600 dark:text-teal-400" },
   { href: "/settings", label: "לוקאפים", icon: Settings2, iconClass: "text-fuchsia-600 dark:text-fuchsia-400" },
   { href: "/settings/open-year", label: "פתיחת שנתון", icon: Settings2, iconClass: "text-blue-600 dark:text-blue-400" },
+  { href: "/settings/archived-cohorts", label: "מחזורים קודמים", icon: Settings2, iconClass: "text-zinc-500 dark:text-zinc-400" },
   { href: "/settings/users", label: "משתמשים", icon: Settings2, iconClass: "text-slate-600 dark:text-slate-400" },
 ];
 

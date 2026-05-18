@@ -30,6 +30,7 @@ type Exam = {
   target_type: string;
   target_id: string;
   target_label?: string;
+  makeup_locked_at?: string | null;
   teachers: { name: string } | null;
 };
 
@@ -98,6 +99,7 @@ export function ExamEditClient({ id }: { id: string }) {
   const e = data.exam;
   const lines = data.exam_students ?? [];
   const { total, took, forMakeup } = countStatuses(lines);
+  const locked = Boolean(e.makeup_locked_at);
 
   return (
     <div className="space-y-6">
@@ -127,9 +129,10 @@ export function ExamEditClient({ id }: { id: string }) {
           <button
             type="button"
             onClick={() => void finishMakeups()}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+            disabled={locked}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
           >
-            סיום — יצירת השלמות
+            {locked ? "המבחן ננעל — השלמות נוצרו" : "סיום — יצירת השלמות"}
           </button>
           <Link href="/exams" className="rounded-lg border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800">
             חזרה
@@ -151,6 +154,12 @@ export function ExamEditClient({ id }: { id: string }) {
           <div className="mt-1 text-2xl font-semibold tabular-nums text-sky-900">{forMakeup}</div>
         </div>
       </div>
+
+      {locked ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          המבחן ננעל. לא ניתן לעדכן סטטוסים כאן — רק מכרטיס תלמידה.
+        </p>
+      ) : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
         <Table>
@@ -179,21 +188,24 @@ export function ExamEditClient({ id }: { id: string }) {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
+                        disabled={locked}
+                        className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
                         onClick={() => void setStatus(row.id, "took")}
                       >
                         נבחנה במועד
                       </button>
                       <button
                         type="button"
-                        className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100"
+                        disabled={locked}
+                        className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 disabled:opacity-40"
                         onClick={() => void setStatus(row.id, "missing")}
                       >
                         לא נבחנה
                       </button>
                       <button
                         type="button"
-                        className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100"
+                        disabled={locked}
+                        className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-40"
                         onClick={() => void setStatus(row.id, "completed")}
                       >
                         הושלמה בהשלמה

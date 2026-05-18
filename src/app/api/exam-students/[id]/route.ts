@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit/log";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import type { ExamStudentStatus } from "@/lib/types/db";
 import {
+  assertExamNotLocked,
   assertNoOpenMakeupDuplicate,
   assertValidExamStudentStatusTransition,
 } from "@/lib/validations/exams";
@@ -12,8 +13,9 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const body = (await request.json()) as { status?: ExamStudentStatus };
+  const body = (await request.json()) as { status?: ExamStudentStatus; from_student_card?: boolean };
   const status = body.status;
+  const fromStudentCard = Boolean(body.from_student_card);
 
   if (!status || !["took", "missing", "pending", "makeup", "completed"].includes(status)) {
     return NextResponse.json({ error: "סטטוס לא תקין" }, { status: 400 });
@@ -32,6 +34,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .single();
 
   if (gErr || !row) return NextResponse.json({ error: "רשומה לא נמצאה" }, { status: 404 });
+
+  if (!fromStudentCard) {
+    const locked = await assertExamNotLocked(supabase, row.exam_id as string);
+    if (!locked.ok) return NextResponse.json({ error: locked.error }, { status: 400 });
+  }
 
   let nextStatus: ExamStudentStatus = status;
 
@@ -79,6 +86,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     entityType: "exam_student",
     entityId: id,
     actionType: "status_change",
+    entityNameSnapshot: `סטטוס ${nextStatus}`,
     oldValue: { status: row.status },
     newValue: { status: nextStatus },
   });

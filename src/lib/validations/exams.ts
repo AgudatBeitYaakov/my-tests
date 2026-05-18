@@ -58,6 +58,25 @@ export async function assertNoOpenMakeupDuplicate(
   return { ok: true, error: null };
 }
 
+export async function assertExamNotLocked(
+  supabase: SupabaseClient,
+  examId: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  const { data, error } = await supabase
+    .from("exams")
+    .select("makeup_locked_at")
+    .eq("id", examId)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (data?.makeup_locked_at) {
+    return {
+      ok: false,
+      error: "המבחן ננעל לאחר העברה להשלמות — עדכון רק מכרטיס תלמידה",
+    };
+  }
+  return { ok: true, error: null };
+}
+
 export async function assertValidExamStudentStatusTransition(
   supabase: SupabaseClient,
   examStudentId: string,
@@ -86,6 +105,10 @@ export async function assertValidExamStudentStatusTransition(
   if (nextStatus === "missing" && row.status === "makeup") {
     const dup = await assertNoOpenMakeupDuplicate(supabase, row.student_id as string, row.exam_id as string);
     if (!dup.ok) return dup;
+  }
+
+  if (nextStatus === "makeup" && row.status === "completed") {
+    return { ok: false, error: "תלמידה כבר השלימה — לא ניתן להחזיר להשלמה" };
   }
 
   return { ok: true, error: null };

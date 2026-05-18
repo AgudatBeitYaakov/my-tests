@@ -169,10 +169,18 @@ export async function POST(request: Request) {
   const { data: teacherRow } = await supabase.from("teachers").select("name").eq("id", teacher_id).single();
   const teacherName = (teacherRow?.name as string) ?? "";
 
+  const { data: cohortRow } = await supabase.from("cohorts").select("number").eq("id", cohort_id).maybeSingle();
+  const targetLabels = await resolveExamTargetLabels(supabase, [
+    { id: examId, target_type, target_id },
+  ]);
+
   const rows = await buildExamStudentRows(supabase, {
     examId,
     studentIds,
     teacherName,
+    subject,
+    cohortNumber: cohortRow?.number ?? null,
+    targetName: targetLabels[examId] ?? null,
   });
 
   const { error: esErr } = await supabase.from("exam_students").insert(rows);
@@ -186,6 +194,7 @@ export async function POST(request: Request) {
     entityType: "exam",
     entityId: examId,
     actionType: "create",
+    entityNameSnapshot: subject,
     newValue: { teacher_id, subject, exam_date, target_type, target_id, cohort_id, teacher_assignment_id: assignmentId },
   });
 

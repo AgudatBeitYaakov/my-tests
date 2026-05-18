@@ -19,6 +19,9 @@ export async function buildExamStudentRows(
     examId: string;
     studentIds: string[];
     teacherName: string;
+    subject: string;
+    cohortNumber: string | number | null;
+    targetName: string | null;
   },
 ): Promise<Record<string, unknown>[]> {
   if (!params.studentIds.length) return [];
@@ -31,6 +34,8 @@ export async function buildExamStudentRows(
   if (error) throw new Error(error.message);
 
   const byId = new Map((data ?? []).map((r) => [r.id as string, r as StudentSnapRow]));
+  const cohortSnap =
+    params.cohortNumber != null && params.cohortNumber !== "" ? String(params.cohortNumber) : null;
 
   return params.studentIds.map((student_id) => {
     const s = byId.get(student_id);
@@ -42,6 +47,9 @@ export async function buildExamStudentRows(
       track_snapshot: lookupName(s?.tracks),
       specialization_snapshot: lookupName(s?.specializations),
       teacher_snapshot: params.teacherName,
+      subject_snapshot: params.subject,
+      cohort_number_snapshot: cohortSnap,
+      target_name_snapshot: params.targetName,
     };
   });
 }
