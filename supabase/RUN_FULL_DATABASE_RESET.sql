@@ -1,5 +1,6 @@
 -- הרצה אחת ב-Supabase SQL Editor: מוחק את כל הטבלאות ויוצר מחדש.
 -- מערכת שנים עצמאיות: כל נתון שייך ל-academic_year_id בלבד.
+-- כולל: PATCH_REMAINING_FEATURES, PATCH_STUDENT_EXTENSIONS, PATCH_AUTH_USERS (ללא מחזורים).
 -- חשוב: להריץ את הקובץ מהשורה הראשונה עד האחרונה.
 
 drop view if exists public.active_cohorts_view;
@@ -36,6 +37,10 @@ drop function if exists public.assignments_validate_target() cascade;
 drop function if exists public.students_validate_teaching_fields() cascade;
 drop function if exists public.students_validate_year_grade() cascade;
 drop function if exists public.academic_years_single_active() cascade;
+drop function if exists public.teachers_default_academic_year() cascade;
+drop function if exists public.exam_tracking_fill_academic_year() cascade;
+drop function if exists public.student_history_fill_academic_year() cascade;
+drop function if exists public.makeup_exams_fill_academic_year() cascade;
 
 drop type if exists public.student_status cascade;
 drop type if exists public.exam_target_type cascade;
@@ -277,6 +282,13 @@ create table public.notifications (
   created_at timestamptz not null default now()
 );
 
+-- הגדרות מערכת (מפתח/ערך JSON). האפליקציה הנוכחית לא קוראת מכאן; נשמר לתאימות PostgREST.
+create table public.system_settings (
+  key text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.academic_years_single_active()
 returns trigger language plpgsql as $$
 begin
@@ -424,6 +436,81 @@ create trigger trg_exam_students_updated
   before update on public.exam_students
   for each row execute function public.set_updated_at();
 
+-- ממלא academic_year_id כשהאפליקציה לא שולחת (מורים, מעקב, היסטוריה, השלמות)
+create or replace function public.teachers_default_academic_year()
+returns trigger language plpgsql as $$
+begin
+  if new.academic_year_id is null then
+    select id into new.academic_year_id from public.academic_years where is_active limit 1;
+    if new.academic_year_id is null then
+      raise exception 'לא הוגדרה שנה פעילה — צרי שנה בהגדרות לפני הוספת מורה';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_teachers_default_year
+  before insert on public.teachers
+  for each row execute function public.teachers_default_academic_year();
+
+create or replace function public.exam_tracking_fill_academic_year()
+returns trigger language plpgsql as $$
+begin
+  if new.academic_year_id is null then
+    select e.academic_year_id into new.academic_year_id
+    from public.exams e
+    where e.id = new.exam_id;
+  end if;
+  if new.academic_year_id is null then
+    raise exception 'exam_tracking: exam not found';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_exam_tracking_fill_year
+  before insert on public.exam_tracking
+  for each row execute function public.exam_tracking_fill_academic_year();
+
+create or replace function public.student_history_fill_academic_year()
+returns trigger language plpgsql as $$
+begin
+  if new.academic_year_id is null then
+    select s.academic_year_id into new.academic_year_id
+    from public.students s
+    where s.id = new.student_id;
+  end if;
+  if new.academic_year_id is null then
+    raise exception 'student_history: student not found';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_student_history_fill_year
+  before insert on public.student_history
+  for each row execute function public.student_history_fill_academic_year();
+
+create or replace function public.makeup_exams_fill_academic_year()
+returns trigger language plpgsql as $$
+begin
+  if new.academic_year_id is null then
+    select e.academic_year_id into new.academic_year_id
+    from public.exams e
+    where e.id = new.exam_id;
+  end if;
+  if new.academic_year_id is null then
+    raise exception 'makeup_exams: exam not found';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_makeup_exams_fill_year
+  before insert on public.makeup_exams
+  for each row execute function public.makeup_exams_fill_academic_year();
+
 create index idx_students_tz on public.students (tz);
 create index idx_students_full_name on public.students (full_name_generated);
 create index idx_students_deleted on public.students (deleted_at) where deleted_at is null;
@@ -438,6 +525,7 @@ create index idx_exam_students_exam_id on public.exam_students (exam_id);
 create index idx_exam_students_student_id on public.exam_students (student_id);
 create index idx_exam_students_status on public.exam_students (status);
 create index idx_makeup_exams_academic_year on public.makeup_exams (academic_year_id);
+create index idx_makeup_exams_student_id on public.makeup_exams (student_id);
 create index idx_makeup_status on public.makeup_exams (status);
 create index idx_exam_tracking_academic_year on public.exam_tracking (academic_year_id);
 create index idx_exam_tracking_deleted on public.exam_tracking (deleted_at) where deleted_at is null;
@@ -464,6 +552,7 @@ alter table public.makeup_exams enable row level security;
 alter table public.exam_tracking enable row level security;
 alter table public.student_history enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.system_settings enable row level security;
 
 insert into public.classes (name) values
   ('יא1'), ('יא2'), ('יב1'), ('יב2')
