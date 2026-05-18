@@ -30,11 +30,21 @@ export async function listAllCohorts(supabase: SupabaseClient): Promise<CohortRo
 }
 
 export async function loadDefaultCohortPair(supabase: SupabaseClient): Promise<CohortPairView | null> {
-  const { data, error } = await supabase
-    .from("active_cohorts_view")
-    .select(COHORT_SELECT);
-  if (error) throw new Error(error.message);
-  const rows = (data ?? []).map(normalizeCohort);
+  let rows: CohortRow[] = [];
+
+  const fromView = await supabase.from("active_cohorts_view").select(COHORT_SELECT);
+  if (!fromView.error && (fromView.data?.length ?? 0) >= 2) {
+    rows = (fromView.data ?? []).map(normalizeCohort);
+  } else {
+    const fromTable = await supabase
+      .from("cohorts")
+      .select(COHORT_SELECT)
+      .is("deleted_at", null)
+      .in("display_order", [1, 2]);
+    if (fromTable.error) throw new Error(fromTable.error.message);
+    rows = (fromTable.data ?? []).map(normalizeCohort);
+  }
+
   if (rows.length < 2) return null;
   return buildCohortPairView(rows[0], rows[1]);
 }
@@ -96,12 +106,20 @@ export async function createNewCohort(
     return { error: "מספר מחזור לא תקין" };
   }
 
-  const { data: layers, error: layersErr } = await supabase
+  let layers: { data: unknown[] | null; error: { message: string } | null } = await supabase
     .from("active_cohorts_view")
     .select(COHORT_SELECT);
+  if (layers.error || (layers.data?.length ?? 0) < 2) {
+    layers = await supabase
+      .from("cohorts")
+      .select(COHORT_SELECT)
+      .is("deleted_at", null)
+      .in("display_order", [1, 2]);
+  }
+  const layersErr = layers.error;
   if (layersErr) return { error: layersErr.message };
 
-  const layerRows = (layers ?? []).map(normalizeCohort);
+  const layerRows = (layers.data ?? []).map((row) => normalizeCohort(row as Record<string, unknown>));
   const prevLayerA = layerRows.find((c) => c.display_order === 1) ?? null;
   const prevLayerB = layerRows.find((c) => c.display_order === 2) ?? null;
 

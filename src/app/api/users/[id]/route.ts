@@ -10,18 +10,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = await requireAdmin();
   const { id } = await ctx.params;
   const body = (await request.json()) as {
-    full_name?: string;
-    role?: "admin" | "secretary";
     active?: boolean;
     password?: string;
   };
 
   const supabase = createSupabaseAdminClient();
-  const { data: before } = await supabase.from("users").select("*").eq("id", id).single();
+  const { data: before } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
 
   const patch: Record<string, unknown> = {};
-  if (body.full_name !== undefined) patch.full_name = body.full_name.trim();
-  if (body.role !== undefined) patch.role = body.role === "admin" ? "admin" : "secretary";
   if (body.active !== undefined) patch.active = body.active;
   if (body.password?.trim()) patch.password_hash = await hashPassword(body.password.trim());
 
@@ -46,8 +42,11 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
   if (id === admin.id) return NextResponse.json({ error: "לא ניתן למחוק את עצמך" }, { status: 400 });
 
   const supabase = createSupabaseAdminClient();
-  const { data: before } = await supabase.from("users").select("*").eq("id", id).single();
-  const { error } = await supabase.from("users").delete().eq("id", id);
+  const { data: before } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+  const { error } = await supabase
+    .from("users")
+    .update({ deleted_at: new Date().toISOString(), active: false })
+    .eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   await writeAudit(supabase, {

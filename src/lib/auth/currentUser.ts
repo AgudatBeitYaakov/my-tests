@@ -13,6 +13,7 @@ export async function getCurrentUser(supabase?: SupabaseClient): Promise<AppUser
     .from("users")
     .select("id, username, full_name, active")
     .eq("id", userId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error || !data || !data.active) return null;
   return data as AppUser;

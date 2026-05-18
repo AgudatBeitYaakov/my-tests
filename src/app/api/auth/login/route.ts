@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { getAppPassword } from "@/lib/env";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { USER_COOKIE } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireServiceRoleEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -18,91 +18,85 @@ function sessionResponse(body: Record<string, unknown>, userId: string, status =
   return res;
 }
 
-async function passwordOk(
-  password: string,
-  hash: string,
-  userId: string,
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
-): Promise<boolean> {
-  if (await verifyPassword(password, hash)) return true;
-  try {
-    const { APP_PASSWORD } = requireServiceRoleEnv();
-    if (password === APP_PASSWORD) {
-      const password_hash = await hashPassword(password);
-      await supabase.from("users").update({ password_hash }).eq("id", userId);
-      return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
-
 export async function POST(request: Request) {
-  const body = (await request.json()) as { username?: string; password?: string };
-  const username = (body.username ?? "").trim().toLowerCase();
-  const password = (body.password ?? "").trim();
+  try {
+    const body = (await request.json()) as { username?: string; password?: string };
+    const username = (body.username ?? "").trim().toLowerCase();
+    const password = (body.password ?? "").trim();
 
-  if (!username || !password) {
-    return NextResponse.json({ error: "שם משתמש וסיסמה חובה" }, { status: 400 });
-  }
-
-  const supabase = createSupabaseAdminClient();
-
-  const { data: user, error } = await supabase
-    .from("users")
-    .select("id, username, password_hash, full_name, role, active")
-    .eq("username", username)
-    .maybeSingle();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  if (user) {
-    if (!user.active) return NextResponse.json({ error: "משתמש לא פעיל" }, { status: 403 });
-    const ok = await passwordOk(password, user.password_hash as string, user.id as string, supabase);
-    if (!ok) {
-      return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
+    if (!username || !password) {
+      return NextResponse.json({ error: "שם משתמש וסיסמה חובה" }, { status: 400 });
     }
-    return sessionResponse(
-      {
-        user: {
-          id: user.id,
-          username: user.username,
-          full_name: user.full_name,
-          role: user.role,
-        },
-      },
-      user.id as string,
-    );
-  }
 
-  const { count } = await supabase.from("users").select("id", { count: "exact", head: true });
-  if ((count ?? 0) === 0) {
-    try {
-      const { APP_PASSWORD } = requireServiceRoleEnv();
-      if (password !== APP_PASSWORD) {
-        return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
+    const supabase = createSupabaseAdminClient();
+
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("id, username, password_hash, full_name, active")
+      .eq("username", username)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (user) {
+      if (!user.active) {
+        return NextResponse.json({ error: "משתמש לא פעיל" }, { status: 403 });
       }
+      const ok = await verifyPassword(password, user.password_hash as string);
+      if (!ok) {
+        const appPassword = getAppPassword();
+        if (!appPassword || password !== appPassword) {
+          return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
+        }
+        const password_hash = await hashPassword(password);
+        await supabase.from("users").update({ password_hash }).eq("id", user.id);
+      }
+      return sessionResponse(
+        {
+          user: {
+            id: user.id,
+            username: user.username,
+            full_name: user.full_name,
+          },
+        },
+        user.id as string,
+      );
+    }
+
+    const { count, error: countErr } = await supabase
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .is("deleted_at", null);
+    if (countErr) {
+      return NextResponse.json({ error: countErr.message }, { status: 500 });
+    }
+
+    if ((count ?? 0) === 0) {
       const password_hash = await hashPassword(password);
       const { data: created, error: cErr } = await supabase
         .from("users")
         .insert({
-          username: username || "admin",
+          username,
           password_hash,
-          full_name: "מנהלת מערכת",
-          role: "admin",
+          full_name: username,
           active: true,
         })
-        .select("id, username, full_name, role")
+        .select("id, username, full_name")
         .single();
       if (cErr || !created) {
-        return NextResponse.json({ error: cErr?.message ?? "שגיאה" }, { status: 500 });
+        return NextResponse.json({ error: cErr?.message ?? "שגיאה ביצירת משתמש" }, { status: 500 });
       }
       return sessionResponse({ user: created }, created.id as string);
-    } catch {
-      return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
     }
-  }
 
-  return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
+    return NextResponse.json({ error: "שם משתמש או סיסמה שגויים" }, { status: 401 });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "שגיאת התחברות" },
+      { status: 500 },
+    );
+  }
 }

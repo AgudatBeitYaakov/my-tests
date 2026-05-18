@@ -1,46 +1,54 @@
 import { NextResponse } from "next/server";
 import { listAllCohorts } from "@/lib/cohorts/active";
-import { buildPairOptions, cohortDisplayNumber, cohortWithGradeLabel, gradeInPair } from "@/lib/cohorts/grades";
+import { pairApiPayload, type CohortPairApiResponse } from "@/lib/cohorts/apiPayload";
+import { buildPairOptions } from "@/lib/cohorts/grades";
 import { resolveSelectedCohortPair, setSelectedCohortPair } from "@/lib/cohorts/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-function pairPayload(pair: NonNullable<Awaited<ReturnType<typeof resolveSelectedCohortPair>>>) {
-  return {
-    cohortA: {
-      id: pair.cohortA.id,
-      number: pair.cohortA.number,
-      name: cohortDisplayNumber(pair.cohortA),
-      grade_level: gradeInPair(pair.cohortA.id, pair),
-      label: cohortWithGradeLabel(pair.cohortA),
-    },
-    cohortB: {
-      id: pair.cohortB.id,
-      number: pair.cohortB.number,
-      name: cohortDisplayNumber(pair.cohortB),
-      grade_level: gradeInPair(pair.cohortB.id, pair),
-      label: cohortWithGradeLabel(pair.cohortB),
-    },
-    label: `${pair.cohortA.number} + ${pair.cohortB.number}`,
-  };
-}
+const RULES = {
+  adjacentOnly: true,
+  sourceOfTruth: "cohort_id" as const,
+  gradeFrom: "display_order" as const,
+};
 
 export async function GET() {
-  const supabase = createSupabaseAdminClient();
-  const cohorts = await listAllCohorts(supabase);
-  const { options, defaultPair } = buildPairOptions(cohorts);
-  const selected = await resolveSelectedCohortPair(supabase);
+  try {
+    const supabase = createSupabaseAdminClient();
+    const cohorts = await listAllCohorts(supabase);
+    const { options, defaultPair } = buildPairOptions(cohorts);
+    const selected = await resolveSelectedCohortPair(supabase);
 
-  return NextResponse.json({
-    pairs: options.map((p) => ({
-      ...p,
-      isActivePair: p.isDefaultPair,
-    })),
-    defaultPair,
-    activePair: defaultPair,
-    selected: selected ? pairPayload(selected) : null,
-  });
+    const body: CohortPairApiResponse = {
+      pairs: options.map((p) => ({
+        cohortAId: p.cohortAId,
+        cohortBId: p.cohortBId,
+        label: p.label,
+        isDefaultPair: p.isDefaultPair,
+        isActivePair: p.isDefaultPair,
+      })),
+      selected: selected ? pairApiPayload(selected) : null,
+      setupRequired: !selected,
+      message: selected
+        ? null
+        : "אין זוג מחזורים פעיל. פתחי מחזור חדש בהגדרות → פתיחת שנתון (למשל 10, ואחריו 9).",
+      rules: RULES,
+    };
+
+    return NextResponse.json(body);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        pairs: [],
+        selected: null,
+        setupRequired: true,
+        message: (e as Error).message,
+        rules: RULES,
+      } satisfies CohortPairApiResponse,
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -52,8 +60,8 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseAdminClient();
-  const pair = await setSelectedCohortPair(supabase, a, b);
-  if (!pair) return NextResponse.json({ error: "זוג מחזורים לא תקין" }, { status: 400 });
+  const { pair, error } = await setSelectedCohortPair(supabase, a, b);
+  if (!pair) return NextResponse.json({ error: error ?? "זוג מחזורים לא תקין" }, { status: 400 });
 
-  return NextResponse.json({ ok: true, selected: pairPayload(pair) });
+  return NextResponse.json({ ok: true, selected: pairApiPayload(pair), rules: RULES });
 }

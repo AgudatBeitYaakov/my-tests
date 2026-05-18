@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "ישות לא תקינה" }, { status: 400 });
   }
 
-  const table = ENTITY_TO_TABLE[entity] as "grade_levels" | "classes" | "specializations" | "tracks";
+  const table = ENTITY_TO_TABLE[entity];
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.from(table).select("id, name").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -93,12 +93,14 @@ create table public.users (
   id uuid primary key default gen_random_uuid(),
   username text not null,
   password_hash text not null,
-  full_name text not null,
+  full_name text not null default '',
   active boolean not null default true,
   created_at timestamptz not null default now(),
   deleted_at timestamptz,
   unique (username)
 );
+
+alter table public.users drop column if exists role;
 
 create table public.teachers (
   id uuid primary key default gen_random_uuid(),

@@ -22,10 +22,20 @@ export function requireSupabasePublicEnv() {
   } as const;
 }
 
+export function requireServiceRoleKey(): string {
+  return normalizeServiceRoleKey(requireEnv("SUPABASE_SERVICE_ROLE_KEY"));
+}
+
+export function getAppPassword(): string | null {
+  const raw = process.env.APP_PASSWORD;
+  if (raw == null || !String(raw).trim()) return null;
+  return stripBom(String(raw).trim());
+}
+
 export function requireServiceRoleEnv() {
   return {
-    SUPABASE_SERVICE_ROLE_KEY: normalizeServiceRoleKey(requireEnv("SUPABASE_SERVICE_ROLE_KEY")),
-    APP_PASSWORD: requireEnv("APP_PASSWORD"),
+    SUPABASE_SERVICE_ROLE_KEY: requireServiceRoleKey(),
+    APP_PASSWORD: getAppPassword() ?? "",
   } as const;
 }
 

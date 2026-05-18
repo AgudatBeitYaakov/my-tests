@@ -10,7 +10,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ entity: s
     return NextResponse.json({ error: "ישות לא תקינה" }, { status: 400 });
   }
 
-  const table = ENTITY_TO_TABLE[entity] as "grade_levels" | "classes" | "specializations" | "tracks";
+  const table = ENTITY_TO_TABLE[entity];
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.from(table).delete().not("id", "is", null).select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

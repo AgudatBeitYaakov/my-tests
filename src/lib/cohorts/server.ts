@@ -1,29 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  loadCohortPairByIds,
-  loadDefaultCohortPair,
-} from "@/lib/cohorts/active";
-import { getSelectedCohortIds, setSelectedCohortIds } from "@/lib/cohorts/settings";
+import { repairAndResolveCohortPair } from "@/lib/cohorts/bootstrap";
+import { loadCohortPairByIds } from "@/lib/cohorts/active";
+import { validateAdjacentCohortPair } from "@/lib/cohorts/pairRules";
+import { setSelectedCohortIds } from "@/lib/cohorts/settings";
 import type { CohortPairView } from "@/lib/cohorts/types";
 
 export async function resolveSelectedCohortPair(supabase: SupabaseClient): Promise<CohortPairView | null> {
-  const ids = await getSelectedCohortIds(supabase);
-  if (ids) {
-    const pair = await loadCohortPairByIds(supabase, ids[0], ids[1]);
-    if (pair) return pair;
-  }
-  return loadDefaultCohortPair(supabase);
+  return repairAndResolveCohortPair(supabase);
 }
 
 export async function setSelectedCohortPair(
   supabase: SupabaseClient,
   cohortAId: string,
   cohortBId: string,
-): Promise<CohortPairView | null> {
+): Promise<{ pair: CohortPairView | null; error?: string }> {
   const pair = await loadCohortPairByIds(supabase, cohortAId, cohortBId);
-  if (!pair) return null;
+  if (!pair) return { pair: null, error: "זוג מחזורים לא נמצא" };
+
+  const adjacentErr = validateAdjacentCohortPair(pair.cohortA, pair.cohortB);
+  if (adjacentErr) return { pair: null, error: adjacentErr };
+
   await setSelectedCohortIds(supabase, [pair.cohortA.id, pair.cohortB.id]);
-  return pair;
+  return { pair };
 }
 
 export async function selectedCohortIdList(supabase: SupabaseClient): Promise<string[]> {

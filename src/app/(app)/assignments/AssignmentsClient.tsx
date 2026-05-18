@@ -126,7 +126,7 @@ export function AssignmentsClient() {
               sheetName="שיבוצים"
               exportUrl="/api/export/assignments"
             />
-            <Link href="/settings/grade-levels" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200">
+            <Link href="/settings/classes" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-200">
               <Settings2 className="size-4 shrink-0 opacity-80" strokeWidth={2} />
               ניהול לוקאפים
             </Link>
