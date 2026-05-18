@@ -152,16 +152,18 @@ export async function resolveAssignmentTargetLabels(
   return labels;
 }
 
-export type YearGradeScope = {
+export type GradeScope = {
   academic_year_id: string;
-  year_group: number;
   grade_level: GradeLevel;
 };
+
+/** @deprecated use GradeScope */
+export type YearGradeScope = GradeScope;
 
 export async function fetchStudentIdsForAssignmentTarget(
   supabase: SupabaseClient,
   target: AssignmentTargetColumns,
-  scope: YearGradeScope,
+  scope: GradeScope,
   options?: { teachingTrackType?: TeachingTrackType | null; category?: AssignmentCategory },
 ): Promise<{ ids: string[]; error: string | null }> {
   const category = options?.category;
@@ -173,7 +175,6 @@ export async function fetchStudentIdsForAssignmentTarget(
   if (target.psychology_enabled) {
     const { data, error } = await notDeleted(supabase.from("students").select("id"))
       .eq("academic_year_id", scope.academic_year_id)
-      .eq("year_group", scope.year_group)
       .eq("grade_level", scope.grade_level)
       .eq("is_psychology", true);
     if (error) return { ids: [], error: error.message };
@@ -184,7 +185,6 @@ export async function fetchStudentIdsForAssignmentTarget(
     if (!target.specialization_id) return { ids: [], error: "התמחות חסרה" };
     const { data, error } = await notDeleted(supabase.from("students").select("id"))
       .eq("academic_year_id", scope.academic_year_id)
-      .eq("year_group", scope.year_group)
       .eq("grade_level", scope.grade_level)
       .or(
         `specialization_id.eq.${target.specialization_id},secondary_specialization_id.eq.${target.specialization_id}`,
@@ -201,7 +201,6 @@ export async function fetchStudentIdsForAssignmentTarget(
       .maybeSingle();
     let q = notDeleted(supabase.from("students").select("id"))
       .eq("academic_year_id", scope.academic_year_id)
-      .eq("year_group", scope.year_group)
       .eq("grade_level", scope.grade_level)
       .eq("track_id", target.track_id);
     if (isTeachingTrackName((trackRow?.name as string) ?? "") && options?.teachingTrackType) {
@@ -215,7 +214,6 @@ export async function fetchStudentIdsForAssignmentTarget(
   if (target.class_id) {
     const { data, error } = await notDeleted(supabase.from("students").select("id"))
       .eq("academic_year_id", scope.academic_year_id)
-      .eq("year_group", scope.year_group)
       .eq("grade_level", scope.grade_level)
       .eq("class_id", target.class_id);
     if (error) return { ids: [], error: error.message };
@@ -243,7 +241,6 @@ export function assignmentImportKey(
     teacher_id: string;
     subject: string;
     lesson_name: string | null;
-    year_group: number;
     grade_level: GradeLevel;
     teaching_mode: TeachingMode | null;
     assignment_category: AssignmentCategory;
@@ -252,7 +249,6 @@ export function assignmentImportKey(
   return [
     academicYearId,
     row.teacher_id,
-    row.year_group,
     row.grade_level,
     row.subject,
     row.lesson_name ?? "",

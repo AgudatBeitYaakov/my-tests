@@ -44,7 +44,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     teacher_id?: string;
     subject?: string;
     lesson_name?: string | null;
-    year_group?: number;
     grade_level?: string;
     assignment_category?: string;
     class_id?: string | null;
@@ -62,7 +61,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
   if (body.subject !== undefined) patch.subject = body.subject.trim();
   if (body.lesson_name !== undefined) patch.lesson_name = (body.lesson_name ?? "").trim() || null;
-  if (body.year_group !== undefined) patch.year_group = body.year_group;
   if (body.grade_level !== undefined) {
     const gl = parseGradeLevel(body.grade_level);
     if (!gl) return NextResponse.json({ error: "שכבה לא תקינה" }, { status: 400 });

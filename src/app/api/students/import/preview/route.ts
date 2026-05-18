@@ -71,7 +71,6 @@ export async function POST(request: Request) {
         "כיתה",
         "התמחות",
         "מסלול",
-        "שנתון",
         "שכבה",
       ],
     }, { status: 400 });

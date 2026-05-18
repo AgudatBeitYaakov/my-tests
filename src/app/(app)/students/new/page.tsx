@@ -28,9 +28,8 @@ export default async function NewStudentPage() {
     const year = await getActiveAcademicYear(sb);
     if (!year) throw new Error("לא הוגדרה שנה פעילה");
 
-    const year_group = Number(formData.get("year_group"));
     const grade_level = parseGradeLevel(String(formData.get("grade_level") ?? ""));
-    if (!Number.isFinite(year_group) || !grade_level) throw new Error("שנתון ושכבה חובה");
+    if (!grade_level) throw new Error("שכבה חובה");
 
     const extra = await normalizeStudentFields(sb, {
       specialization_id: String(formData.get("specialization_id") ?? "").trim() || null,
@@ -46,7 +45,6 @@ export default async function NewStudentPage() {
       first_name: String(formData.get("first_name") ?? "").trim(),
       last_name: String(formData.get("last_name") ?? "").trim(),
       tz: String(formData.get("tz") ?? "").trim(),
-      year_group,
       grade_level,
       class_id: String(formData.get("class_id") ?? "").trim(),
       ...extra.patch,
@@ -71,10 +69,6 @@ export default async function NewStudentPage() {
         <label className="block text-sm">
           ת״ז
           <input name="tz" required dir="ltr" className="mt-1 w-full rounded border px-2 py-1" />
-        </label>
-        <label className="block text-sm">
-          שנתון
-          <input name="year_group" required type="number" min={1} className="mt-1 w-full rounded border px-2 py-1" />
         </label>
         <label className="block text-sm">
           שכבה

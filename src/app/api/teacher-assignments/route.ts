@@ -7,8 +7,8 @@ import {
   validateAssignmentWithCategory,
 } from "@/lib/assignments/target";
 import type { AssignmentCategory } from "@/lib/types/db";
-import { formatYearGradeLabel, parseGradeLevel } from "@/lib/academicYears/labels";
-import { listYearGradeOptions } from "@/lib/academicYears/options";
+import { formatGradeLabel, parseGradeLevel } from "@/lib/academicYears/labels";
+import { listGradeOptions } from "@/lib/academicYears/options";
 import {
   readOnlyResponse,
   resolveAcademicYearScope,
@@ -31,12 +31,10 @@ export async function GET(request: Request) {
   const psychology = searchParams.get("psychology_enabled");
   const categoryParam = searchParams.get("assignment_category");
   const gradeLevel = parseGradeLevel(searchParams.get("grade_level") ?? "");
-  const yearGroupRaw = searchParams.get("year_group");
-  const yearGroup = yearGroupRaw ? Number.parseInt(yearGroupRaw, 10) : NaN;
 
   const supabase = createSupabaseAdminClient();
   const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
-  const layers = await listYearGradeOptions(supabase, scope.year.id);
+  const grades = await listGradeOptions(supabase, scope.year.id);
 
   let q = notDeleted(supabase.from("teacher_assignments").select(ASSIGNMENT_WITH_LOOKUPS))
     .eq("academic_year_id", scope.year.id)
@@ -50,7 +48,6 @@ export async function GET(request: Request) {
     q = q.eq("assignment_category", categoryParam);
   }
   if (gradeLevel) q = q.eq("grade_level", gradeLevel);
-  if (Number.isFinite(yearGroup)) q = q.eq("year_group", yearGroup);
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -81,7 +78,6 @@ export async function GET(request: Request) {
     assignments: rows.map((a) => {
       const row = a as {
         id: string;
-        year_group: number;
         grade_level: GradeLevel;
         class_id: string | null;
         specialization_id: string | null;
@@ -97,12 +93,12 @@ export async function GET(request: Request) {
       };
       return {
         ...a,
-        year_label: formatYearGradeLabel(row.year_group, row.grade_level),
+        year_label: formatGradeLabel(row.grade_level),
         target_label: labels[row.id] ?? "—",
         target_type_label: assignmentTargetTypeLabel(targetCols, row.assignment_category),
       };
     }),
-    layers,
+    grades,
     readOnly: scope.readOnly,
     academicYear: scope.year,
   });
@@ -121,7 +117,6 @@ export async function POST(request: Request) {
       teacher_id?: string;
       subject?: string;
       lesson_name?: string;
-      year_group?: number;
       grade_level?: string;
       class_id?: string | null;
       specialization_id?: string | null;
@@ -133,11 +128,10 @@ export async function POST(request: Request) {
     const teacher_id = body.teacher_id?.trim();
     const subject = (body.subject ?? "").trim();
     const lesson_name = (body.lesson_name ?? "").trim() || null;
-    const year_group = Number(body.year_group);
     const grade_level = parseGradeLevel(String(body.grade_level ?? ""));
 
-    if (!teacher_id || !subject || !Number.isFinite(year_group) || !grade_level) {
-      return NextResponse.json({ error: "כל השדות חובה כולל שנתון ושכבה" }, { status: 400 });
+    if (!teacher_id || !subject || !grade_level) {
+      return NextResponse.json({ error: "כל השדות חובה כולל שכבה" }, { status: 400 });
     }
 
     const category = parseAssignmentCategory(body.assignment_category ?? "");
@@ -171,7 +165,6 @@ export async function POST(request: Request) {
         subject,
         lesson_name,
         assignment_category: category,
-        year_group,
         grade_level,
         class_id: target.class_id,
         specialization_id: target.specialization_id,

@@ -24,7 +24,6 @@ export type Student = {
   first_name: string;
   last_name: string;
   tz: string;
-  year_group: number;
   grade_level: GradeLevel;
   class_id: string;
   specialization_id: string | null;
@@ -63,7 +62,6 @@ export type TeacherAssignment = {
   subject: string;
   lesson_name?: string | null;
   assignment_category: AssignmentCategory;
-  year_group: number;
   grade_level: GradeLevel;
   class_id: string | null;
   specialization_id: string | null;
@@ -84,7 +82,6 @@ export type Exam = {
   specialization_id: string | null;
   track_id: string | null;
   psychology_enabled: boolean;
-  year_group: number;
   grade_level: GradeLevel;
   created_at: string;
 };

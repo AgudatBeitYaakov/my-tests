@@ -1,7 +1,8 @@
 import type { GradeLevel } from "@/lib/academicYears/types";
 
-export function formatYearGradeLabel(yearGroup: number, gradeLevel: GradeLevel): string {
-  return `שנתון ${yearGroup} — שכבה ${gradeLevel}`;
+/** @deprecated use formatGradeLabel — year groups removed */
+export function formatYearGradeLabel(_yearGroup: number | null | undefined, gradeLevel: GradeLevel): string {
+  return formatGradeLabel(gradeLevel);
 }
 
 export function formatGradeLabel(gradeLevel: GradeLevel | null | undefined): string {
@@ -15,9 +16,4 @@ export function parseGradeLevel(raw: string): GradeLevel | null {
   if (t === "B" || t === "b") return "ב";
   if (t === "C" || t === "c" || t === "G" || t === "g") return "ג";
   return null;
-}
-
-export function parseYearGroup(raw: string): number | null {
-  const n = Number.parseInt(raw.trim(), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
 }

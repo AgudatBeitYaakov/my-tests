@@ -11,7 +11,6 @@ export type ScopedDeletePreview = {
 
 export type GradeDeleteBreakdown = {
   grade_level: GradeLevel;
-  year_group: number;
   students: number;
   exams: number;
   assignments: number;
@@ -48,29 +47,25 @@ export async function previewScopedDeletes(
 export async function previewScopedDeletesDetailed(
   supabase: SupabaseClient,
   academicYearId: string,
-  layers: { grade_level: GradeLevel; year_group: number }[],
+  grades: { grade_level: GradeLevel }[],
 ): Promise<{ preview: ScopedDeletePreview; byGrade: GradeDeleteBreakdown[] }> {
   const preview = await previewScopedDeletes(supabase, academicYearId);
   const byGrade: GradeDeleteBreakdown[] = [];
 
-  for (const layer of layers) {
+  for (const grade of grades) {
     const [st, ex, asg] = await Promise.all([
       notDeleted(supabase.from("students").select("id", { count: "exact", head: true }))
         .eq("academic_year_id", academicYearId)
-        .eq("grade_level", layer.grade_level)
-        .eq("year_group", layer.year_group),
+        .eq("grade_level", grade.grade_level),
       notDeleted(supabase.from("exams").select("id", { count: "exact", head: true }))
         .eq("academic_year_id", academicYearId)
-        .eq("grade_level", layer.grade_level)
-        .eq("year_group", layer.year_group),
+        .eq("grade_level", grade.grade_level),
       notDeleted(supabase.from("teacher_assignments").select("id", { count: "exact", head: true }))
         .eq("academic_year_id", academicYearId)
-        .eq("grade_level", layer.grade_level)
-        .eq("year_group", layer.year_group),
+        .eq("grade_level", grade.grade_level),
     ]);
     byGrade.push({
-      grade_level: layer.grade_level,
-      year_group: layer.year_group,
+      grade_level: grade.grade_level,
       students: st.count ?? 0,
       exams: ex.count ?? 0,
       assignments: asg.count ?? 0,

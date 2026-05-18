@@ -27,7 +27,6 @@ const REQUIRED_HEADER_LABELS = [
   ASSIGNMENT_FIELD_ALIASES.teacher_first_name[0],
   ASSIGNMENT_FIELD_ALIASES.teacher_last_name[0],
   ASSIGNMENT_FIELD_ALIASES.subject[0],
-  ASSIGNMENT_FIELD_ALIASES.year_group[0],
   ASSIGNMENT_FIELD_ALIASES.grade_level[0],
 ];
 
@@ -99,7 +98,7 @@ export async function POST(request: Request) {
     supabase.from("tracks").select("id,name").eq("is_active", true),
     notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS)),
     notDeleted(supabase.from("teacher_assignments").select(
-      "teacher_id,year_group,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
+      "teacher_id,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
     )).eq("academic_year_id", scope.year.id),
   ]);
 
@@ -119,7 +118,6 @@ export async function POST(request: Request) {
         teacher_id: a.teacher_id,
         subject: a.subject.trim(),
         lesson_name: (a.lesson_name as string | null) ?? null,
-        year_group: a.year_group,
         grade_level: a.grade_level as "א" | "ב" | "ג",
         class_id: a.class_id,
         specialization_id: a.specialization_id,

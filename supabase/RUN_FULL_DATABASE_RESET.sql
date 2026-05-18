@@ -1,6 +1,6 @@
 -- הרצה אחת ב-Supabase SQL Editor: מוחק את כל הטבלאות ויוצר מחדש.
--- מערכת שנים עצמאיות: כל נתון שייך ל-academic_year_id בלבד.
--- כולל: PATCH_REMAINING_FEATURES, PATCH_STUDENT_EXTENSIONS, PATCH_AUTH_USERS (ללא מחזורים).
+-- מערכת שנים עצמאיות: כל נתון שייך ל-academic_year_id + grade_level (א/ב/ג) בלבד.
+-- ללא מחזורים, ללא year_group, ללא system_settings.
 -- חשוב: להריץ את הקובץ מהשורה הראשונה עד האחרונה.
 
 drop view if exists public.active_cohorts_view;
@@ -20,7 +20,6 @@ drop table if exists public.year_cohorts cascade;
 drop table if exists public.cohort_year_placements cascade;
 drop table if exists public.cohorts cascade;
 drop table if exists public.year_layers cascade;
-drop table if exists public.system_settings cascade;
 drop table if exists public.classes cascade;
 drop table if exists public.specializations cascade;
 drop table if exists public.tracks cascade;
@@ -125,7 +124,6 @@ create table public.students (
   last_name text not null,
   tz text not null,
   full_name_generated text generated always as (first_name || ' ' || last_name) stored,
-  year_group integer not null,
   grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
   class_id uuid not null references public.classes (id) on delete restrict,
   track_id uuid references public.tracks (id) on delete restrict,
@@ -142,7 +140,7 @@ create table public.students (
 
 create unique index uq_students_tz_per_year on public.students (academic_year_id, tz) where deleted_at is null;
 create index idx_students_academic_year on public.students (academic_year_id);
-create index idx_students_year_grade on public.students (academic_year_id, year_group, grade_level);
+create index idx_students_grade on public.students (academic_year_id, grade_level);
 
 alter table public.students add constraint students_teaching_track_type_check
   check (teaching_track_type is null or teaching_track_type in ('full', 'short'));
@@ -158,7 +156,6 @@ create table public.teacher_assignments (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   teacher_id uuid not null references public.teachers (id) on delete restrict,
-  year_group integer not null,
   grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
   subject text not null,
   lesson_name text,
@@ -205,7 +202,6 @@ alter table public.teacher_assignments add constraint teacher_assignments_catego
 create unique index uq_teacher_assignment on public.teacher_assignments (
   academic_year_id,
   teacher_id,
-  year_group,
   grade_level,
   subject,
   coalesce(lesson_name, ''),
@@ -225,7 +221,6 @@ create table public.exams (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   teacher_assignment_id uuid not null references public.teacher_assignments (id) on delete restrict,
-  year_group integer not null,
   grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
   teacher_id uuid not null references public.teachers (id) on delete restrict,
   subject text not null,
@@ -273,7 +268,7 @@ alter table public.exams add constraint exams_category_target_check
   );
 
 create unique index uq_exams_unique on public.exams (
-  academic_year_id, year_group, grade_level, teacher_assignment_id, exam_date
+  academic_year_id, grade_level, teacher_assignment_id, exam_date
 ) where deleted_at is null;
 
 create table public.exam_students (
@@ -286,7 +281,6 @@ create table public.exam_students (
   specialization_snapshot text,
   teacher_snapshot text,
   subject_snapshot text,
-  year_group_snapshot text,
   grade_level_snapshot text,
   academic_year_name_snapshot text,
   target_name_snapshot text,
@@ -333,8 +327,6 @@ create table public.student_history (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   student_id uuid not null references public.students (id) on delete restrict,
-  old_year_group integer,
-  new_year_group integer,
   old_grade_level text,
   new_grade_level text,
   old_class_id uuid references public.classes (id) on delete set null,
@@ -369,13 +361,6 @@ create table public.notifications (
   href text,
   read_at timestamptz,
   created_at timestamptz not null default now()
-);
-
--- הגדרות מערכת (מפתח/ערך JSON). האפליקציה הנוכחית לא קוראת מכאן; נשמר לתאימות PostgREST.
-create table public.system_settings (
-  key text primary key,
-  value jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
 );
 
 create or replace function public.academic_years_single_active()
@@ -482,11 +467,10 @@ create or replace function public.exams_validate_assignment_scope()
 returns trigger language plpgsql as $$
 declare
   a_year_id uuid;
-  a_year_group integer;
   a_grade text;
 begin
-  select ta.academic_year_id, ta.year_group, ta.grade_level
-  into a_year_id, a_year_group, a_grade
+  select ta.academic_year_id, ta.grade_level
+  into a_year_id, a_grade
   from public.teacher_assignments ta
   where ta.id = new.teacher_assignment_id
     and ta.deleted_at is null;
@@ -495,9 +479,7 @@ begin
     raise exception 'teacher_assignment not found or deleted';
   end if;
 
-  if a_year_id <> new.academic_year_id
-     or a_year_group <> new.year_group
-     or a_grade <> new.grade_level then
+  if a_year_id <> new.academic_year_id or a_grade <> new.grade_level then
     raise exception 'exam scope must match teacher_assignment';
   end if;
 
@@ -506,7 +488,7 @@ end;
 $$;
 
 create trigger trg_exams_validate_assignment_scope
-  before insert or update of teacher_assignment_id, academic_year_id, year_group, grade_level on public.exams
+  before insert or update of teacher_assignment_id, academic_year_id, grade_level on public.exams
   for each row execute function public.exams_validate_assignment_scope();
 
 create or replace function public.set_updated_at()
@@ -606,7 +588,7 @@ create index idx_students_tz on public.students (tz);
 create index idx_students_full_name on public.students (full_name_generated);
 create index idx_students_deleted on public.students (deleted_at) where deleted_at is null;
 create index idx_students_import_batch on public.students (import_batch_id);
-create index idx_teacher_assignments_year on public.teacher_assignments (academic_year_id, year_group, grade_level);
+create index idx_teacher_assignments_grade on public.teacher_assignments (academic_year_id, grade_level);
 create index idx_teacher_assignments_class_id on public.teacher_assignments (class_id) where class_id is not null;
 create index idx_teacher_assignments_specialization_id on public.teacher_assignments (specialization_id) where specialization_id is not null;
 create index idx_teacher_assignments_track_id on public.teacher_assignments (track_id) where track_id is not null;
@@ -644,7 +626,6 @@ alter table public.makeup_exams enable row level security;
 alter table public.exam_tracking enable row level security;
 alter table public.student_history enable row level security;
 alter table public.audit_logs enable row level security;
-alter table public.system_settings enable row level security;
 
 insert into public.classes (name) values
   ('יא1'), ('יא2'), ('יב1'), ('יב2')

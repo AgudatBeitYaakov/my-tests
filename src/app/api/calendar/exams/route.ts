@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { formatYearGradeLabel } from "@/lib/academicYears/labels";
+import { formatGradeLabel } from "@/lib/academicYears/labels";
 import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import { notDeleted } from "@/lib/db/softDelete";
 import type { GradeLevel } from "@/lib/academicYears/types";
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   const examsQuery = notDeleted(
     supabase
       .from("exams")
-      .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, teacher_id, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )"),
+      .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, teacher_id, grade_level, teachers ( id, first_name, last_name, full_name_generated )"),
   )
     .eq("academic_year_id", scope.year.id)
     .gte("exam_date", start)
@@ -100,7 +100,6 @@ export async function GET(request: Request) {
     track_id: string | null;
     psychology_enabled: boolean;
     teacher_id: string;
-    year_group: number;
     grade_level: GradeLevel;
     teachers:
       | { id: string; first_name: string; last_name: string; full_name_generated: string | null }
@@ -188,7 +187,7 @@ export async function GET(request: Request) {
     const tr = trackingByExam[e.id] ?? null;
     const cols = colorsForExam(e.exam_date, c, tr);
     const teacherName = teacherEmbedDisplayName(e.teachers);
-    const gradeLevelName = formatYearGradeLabel(e.year_group, e.grade_level);
+    const gradeLevelName = formatGradeLabel(e.grade_level);
     const classConflict =
       Boolean(e.class_id) && (classDayCount.get(classDayKey(e.exam_date, e.class_id!)) ?? 0) > 1;
     const teacherOverlap = (teacherDayCount.get(`${e.exam_date}|${e.teacher_id}`) ?? 0) > 1;

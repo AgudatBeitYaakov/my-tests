@@ -7,7 +7,6 @@ export type StudentWithLookupsRow = {
   first_name: string;
   last_name: string;
   tz: string;
-  year_group: number;
   grade_level: GradeLevel;
   class_id: string;
   specialization_id: string | null;

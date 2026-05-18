@@ -5,7 +5,7 @@ import {
   type TeachingTrackType,
 } from "@/lib/students/fields";
 import { STUDENT_EXCEL_HEADERS } from "@/lib/students/excelTemplate";
-import { parseGradeLevel, parseYearGroup } from "@/lib/academicYears/labels";
+import { parseGradeLevel } from "@/lib/academicYears/labels";
 import type { GradeLevel } from "@/lib/academicYears/types";
 
 export type LookupMaps = {
@@ -26,7 +26,6 @@ export type ParsedImportRow = {
   secondary_specialization?: string;
   psychology?: string;
   teaching_track_type?: string;
-  year_group: string;
   grade_level: string;
 };
 
@@ -39,7 +38,6 @@ export type ValidatedImportRow = ParsedImportRow & {
     specialization_id: string | null;
     secondary_specialization_id: string | null;
     track_id: string | null;
-    year_group: number;
     grade_level: GradeLevel;
     is_psychology: boolean;
     teaching_track_type: TeachingTrackType | null;
@@ -56,7 +54,6 @@ export const FIELD_ALIASES: Record<keyof Omit<ParsedImportRow, "rowNumber">, rea
   secondary_specialization: ["התמחות נוספת", "התמחות נוס", "secondary_specialization"],
   psychology: ["פסיכולוגיה", "psychology"],
   teaching_track_type: ["הוראה מקוצר", "סוג הוראה", "teaching_track_type"],
-  year_group: ["שנתון", "year_group", "year"],
   grade_level: ["שכבה", "grade_level", "grade"],
 } as const;
 
@@ -67,7 +64,6 @@ const REQUIRED_FIELDS: (keyof typeof FIELD_ALIASES)[] = [
   "class_name",
   "specialization",
   "track",
-  "year_group",
   "grade_level",
 ];
 
@@ -170,7 +166,6 @@ export function sheetRowsToObjects(raw: Record<string, unknown>[]): ParsedImport
       secondary_specialization: cellFromRow(obj, "secondary_specialization"),
       psychology: cellFromRow(obj, "psychology"),
       teaching_track_type: cellFromRow(obj, "teaching_track_type"),
-      year_group: cellFromRow(obj, "year_group"),
       grade_level: cellFromRow(obj, "grade_level"),
     });
   }
@@ -195,7 +190,6 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
     if (!r.class_name) errors.push("כיתה חסרה");
     if (!r.specialization) errors.push("התמחות חסרה");
     if (!r.track) errors.push("מסלול חסר");
-    if (!r.year_group?.trim()) errors.push("שנתון חסר");
     if (!r.grade_level?.trim()) errors.push("שכבה חסרה");
 
     if (r.tz) {
@@ -212,9 +206,7 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
     const t = lookupName(maps.trackByName, r.track, "המסלול");
     if (t.err) errors.push(t.err);
 
-    const year_group = parseYearGroup(r.year_group ?? "");
     const grade_level = parseGradeLevel(r.grade_level ?? "");
-    if (!year_group) errors.push("שנתון לא תקין");
     if (!grade_level) errors.push("שכבה לא תקינה (א/ב/ג)");
 
     let secondary_specialization_id: string | null = null;
@@ -241,14 +233,13 @@ export function validateImportRows(rows: ParsedImportRow[], maps: LookupMaps): V
     }
 
     const resolved =
-      errors.length === 0 && c.id && year_group && grade_level
+      errors.length === 0 && c.id && grade_level
         ? {
             academic_year_id: maps.academicYearId,
             class_id: c.id,
             specialization_id: s.id ?? null,
             secondary_specialization_id,
             track_id: t.id ?? null,
-            year_group,
             grade_level,
             is_psychology,
             teaching_track_type,

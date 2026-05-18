@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const studentsQ = notDeleted(
     supabase
       .from("students")
-      .select("id, first_name, last_name, tz, year_group, grade_level")
+      .select("id, first_name, last_name, tz, grade_level")
       .eq("academic_year_id", scope.year.id)
       .limit(8),
   ).or(`first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,tz.ilike.%${escaped}%`);
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const examsQ = notDeleted(
     supabase
       .from("exams")
-      .select("id, subject, exam_date, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
+      .select("id, subject, exam_date, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
       .eq("academic_year_id", scope.year.id)
       .limit(8),
   ).ilike("subject", `%${escaped}%`);

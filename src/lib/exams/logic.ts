@@ -4,12 +4,13 @@ import {
   fetchStudentIdsForAssignmentTarget,
   normalizeTargetInput,
   type AssignmentTargetColumns,
+  type GradeScope,
   type YearGradeScope,
 } from "@/lib/assignments/target";
 import { notDeleted } from "@/lib/db/softDelete";
 import { isTeachingTrackName, type TeachingTrackType } from "@/lib/students/fields";
 
-export type { YearGradeScope, AssignmentTargetColumns };
+export type { GradeScope, YearGradeScope, AssignmentTargetColumns };
 export { fetchStudentIdsForAssignmentTarget as fetchStudentIdsForTarget };
 
 export type FetchStudentsOptions = {
@@ -21,13 +22,12 @@ export async function assertTeacherAssignmentMatchesExam(
   teacherId: string,
   subject: string,
   target: AssignmentTargetColumns,
-  scope: YearGradeScope,
+  scope: GradeScope,
 ): Promise<{ ok: boolean; error: string | null }> {
   let q = notDeleted(supabase.from("teacher_assignments").select("id"))
     .eq("academic_year_id", scope.academic_year_id)
     .eq("teacher_id", teacherId)
     .eq("subject", subject)
-    .eq("year_group", scope.year_group)
     .eq("grade_level", scope.grade_level);
 
   if (target.psychology_enabled) q = q.eq("psychology_enabled", true);
@@ -41,7 +41,7 @@ export async function assertTeacherAssignmentMatchesExam(
   if (!data?.length) {
     return {
       ok: false,
-      error: "אין שיבוץ פעיל למורה במקצוע זה, בשנתון ובאותו יעד",
+      error: "אין שיבוץ פעיל למורה במקצוע זה, בשכבה ובאותו יעד",
     };
   }
   return { ok: true, error: null };

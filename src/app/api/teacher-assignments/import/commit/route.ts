@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     supabase.from("tracks").select("id,name").eq("is_active", true),
     notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS)),
     notDeleted(supabase.from("teacher_assignments").select(
-      "teacher_id,year_group,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
+      "teacher_id,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
     )).eq("academic_year_id", scope.year.id),
   ]);
 
@@ -65,7 +65,6 @@ export async function POST(request: Request) {
         teacher_id: a.teacher_id,
         subject: a.subject.trim(),
         lesson_name: (a.lesson_name as string | null) ?? null,
-        year_group: a.year_group,
         grade_level: a.grade_level as GradeLevel,
         class_id: a.class_id,
         specialization_id: a.specialization_id,
@@ -115,7 +114,6 @@ export async function POST(request: Request) {
       teacher_id: r.resolved.teacher_id,
       subject: r.resolved.subject,
       lesson_name: r.resolved.lesson_name,
-      year_group: r.resolved.year_group,
       grade_level: r.resolved.grade_level,
       assignment_category: r.resolved.assignment_category,
       class_id: r.resolved.class_id,

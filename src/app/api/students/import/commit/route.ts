@@ -89,7 +89,6 @@ export async function POST(request: Request) {
       track_id: r.resolved.track_id,
       is_psychology: r.resolved.is_psychology,
       teaching_track_type: r.resolved.teaching_track_type,
-      year_group: r.resolved.year_group,
       grade_level: r.resolved.grade_level,
       status: "active" as const,
     };

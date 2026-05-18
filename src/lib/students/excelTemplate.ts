@@ -8,7 +8,6 @@ export const STUDENT_EXCEL_HEADERS = [
   "התמחות נוספת",
   "פסיכולוגיה",
   "הוראה מקוצר",
-  "שנתון",
   "שכבה",
 ] as const;
 
@@ -22,6 +21,5 @@ export const STUDENT_EXCEL_EXAMPLE_ROW = [
   "",
   "לא",
   "",
-  "11",
   "א",
 ] as const;

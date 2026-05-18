@@ -6,7 +6,6 @@ import type { GradeLevel } from "@/lib/types/db";
 export async function assertNoDuplicateExam(
   supabase: SupabaseClient,
   params: {
-    yearGroup: number;
     gradeLevel: GradeLevel;
     teacherId: string;
     subject: string;
@@ -19,7 +18,6 @@ export async function assertNoDuplicateExam(
     supabase
       .from("exams")
       .select("id")
-      .eq("year_group", params.yearGroup)
       .eq("grade_level", params.gradeLevel)
       .eq("teacher_id", params.teacherId)
       .eq("subject", params.subject.trim())

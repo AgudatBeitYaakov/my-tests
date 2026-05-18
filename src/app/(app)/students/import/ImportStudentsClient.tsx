@@ -35,7 +35,6 @@ const MAP_FIELDS: { key: keyof ColumnMap; label: string }[] = [
   { key: "secondary_specialization", label: "התמחות נוספת" },
   { key: "psychology", label: "פסיכולוגיה" },
   { key: "teaching_track_type", label: "הוראה מקוצר" },
-  { key: "year_group", label: "שנתון" },
   { key: "grade_level", label: "שכבה" },
 ];
 
@@ -126,7 +125,6 @@ export function ImportStudentsClient() {
           secondary_specialization: r.secondary_specialization,
           psychology: r.psychology,
           teaching_track_type: r.teaching_track_type,
-          year_group: r.year_group,
           grade_level: r.grade_level,
         }));
       const r = await fetch(withYearQuery("/api/students/import/commit", viewingYear?.id), {
@@ -171,7 +169,7 @@ export function ImportStudentsClient() {
     <div className="space-y-8">
       <ListPageHeader
         title="ייבוא תלמידות מאקסל"
-        subtitle="הורידי את התבנית — עמודות קבועות כולל שנתון ושכבה לכל שורה."
+        subtitle="הורידי את התבנית — עמודות קבועות כולל שכבה לכל שורה."
         actions={
           <>
             <a href="/api/students/import/template" className={LIST_SECONDARY_LINK_CLASS}>
@@ -298,7 +296,6 @@ export function ImportStudentsClient() {
                 <TableHead>ת״ז</TableHead>
                 <TableHead>כיתה</TableHead>
                 <TableHead>מסלול</TableHead>
-                <TableHead>שנתון</TableHead>
                 <TableHead>שכבה</TableHead>
                 <TableHead>הערות</TableHead>
               </TableRow>
@@ -313,7 +310,6 @@ export function ImportStudentsClient() {
                   <TableCell dir="ltr">{r.tz}</TableCell>
                   <TableCell>{r.class_name}</TableCell>
                   <TableCell>{r.track}</TableCell>
-                  <TableCell>{r.year_group}</TableCell>
                   <TableCell>{r.grade_level}</TableCell>
                   <TableCell className="text-red-800">
                     {[...r.errors, ...(r.warnings ?? [])].join("; ")}
@@ -337,7 +333,7 @@ export function ImportStudentsClient() {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="אישור ייבוא"
-        description="השנתון והשכבה לכל תלמידה נלקחים מעמודות «שנתון» ו«שכבה» בקובץ."
+        description="השכבה לכל תלמידה נלקחת מעמודת «שכבה» בקובץ."
         hint={confirmHint}
         confirmLabel="ייבוא"
         busy={busy}

@@ -1,4 +1,4 @@
-import { parseGradeLevel, parseYearGroup } from "@/lib/academicYears/labels";
+import { parseGradeLevel } from "@/lib/academicYears/labels";
 import type { GradeLevel } from "@/lib/academicYears/types";
 import {
   assignmentImportKey,
@@ -31,7 +31,6 @@ export type ParsedAssignmentRow = {
   teacher_last_name: string;
   subject: string;
   lesson_name: string;
-  year_group: string;
   grade_level: string;
   assignment_category_raw: string;
   class_name: string;
@@ -48,7 +47,6 @@ export type ValidatedAssignmentRow = ParsedAssignmentRow & {
     teacher_id: string;
     subject: string;
     lesson_name: string | null;
-    year_group: number;
     grade_level: GradeLevel;
     assignment_category: AssignmentCategory;
     teaching_mode: TeachingMode | null;
@@ -63,7 +61,6 @@ export const ASSIGNMENT_FIELD_ALIASES: Record<
   teacher_last_name: ["שם משפחה מורה", "שם משפחה", "last_name"],
   subject: ["מקצוע", "subject"],
   lesson_name: ["שם שיעור", "שיעור", "lesson_name"],
-  year_group: ["שנתון", "year_group", "year"],
   grade_level: ["שכבה", "grade_level", "grade"],
   assignment_category_raw: ["סוג שיבוץ", "assignment_category", "category"],
   class_name: ["כיתה", "class", "class_name"],
@@ -77,7 +74,6 @@ const REQUIRED_FIELDS: (keyof typeof ASSIGNMENT_FIELD_ALIASES)[] = [
   "teacher_first_name",
   "teacher_last_name",
   "subject",
-  "year_group",
   "grade_level",
   "assignment_category_raw",
 ];
@@ -141,7 +137,6 @@ export function sheetRowsToAssignmentObjects(raw: Record<string, unknown>[]): Pa
       teacher_last_name: cellFromRow(obj, "teacher_last_name"),
       subject: cellFromRow(obj, "subject"),
       lesson_name: cellFromRow(obj, "lesson_name"),
-      year_group: cellFromRow(obj, "year_group"),
       grade_level: cellFromRow(obj, "grade_level"),
       assignment_category_raw: cellFromRow(obj, "assignment_category_raw"),
       class_name: cellFromRow(obj, "class_name"),
@@ -279,7 +274,6 @@ export function validateAssignmentImportRows(
     if (!r.teacher_first_name.trim()) errors.push("שם פרטי מורה חסר");
     if (!r.teacher_last_name.trim()) errors.push("שם משפחה מורה חסר");
     if (!r.subject.trim()) errors.push("מקצוע חסר");
-    if (!r.year_group.trim()) errors.push("שנתון חסר");
     if (!r.grade_level.trim()) errors.push("שכבה חסרה");
 
     const category = parseAssignmentCategory(r.assignment_category_raw);
@@ -288,9 +282,7 @@ export function validateAssignmentImportRows(
     const teacher = resolveTeacherId(maps.teacherMaps, r.teacher_first_name, r.teacher_last_name);
     if (teacher.err) errors.push(teacher.err);
 
-    const year_group = parseYearGroup(r.year_group);
     const grade_level = parseGradeLevel(r.grade_level);
-    if (!year_group) errors.push("שנתון לא תקין");
     if (!grade_level) errors.push("שכבה לא תקינה (א/ב/ג)");
 
     const { target, errors: targetErrors } = category
@@ -314,12 +306,11 @@ export function validateAssignmentImportRows(
     }
 
     const resolved =
-      errors.length === 0 && teacher.id && year_group && grade_level && category
+      errors.length === 0 && teacher.id && grade_level && category
         ? {
             teacher_id: teacher.id,
             subject: r.subject.trim(),
             lesson_name: r.lesson_name.trim() || null,
-            year_group,
             grade_level,
             assignment_category: category,
             ...target,

@@ -25,7 +25,7 @@ const fetcher = (url: string) => fetch(url).then((r) => {
   return r.json();
 });
 
-type LayerOption = { grade_level: string; year_group: number; label: string };
+type GradeOption = { grade_level: string; label: string };
 
 type AssignmentRow = {
   id: string;
@@ -33,7 +33,6 @@ type AssignmentRow = {
   subject: string;
   lesson_name?: string | null;
   teaching_mode?: TeachingMode | null;
-  year_group: number;
   grade_level: string;
   year_label?: string;
   class_id: string | null;
@@ -67,7 +66,7 @@ export function AssignmentsClient() {
   }, [viewingYear?.id, categoryFilter]);
   const { data: aData, error: aErr, isLoading: aLoad, mutate } = useSWR<{
     assignments: AssignmentRow[];
-    layers?: LayerOption[];
+    grades?: GradeOption[];
   }>(assignmentsUrl, fetcher);
   const { data: clData } = useSWR<{ items: LookupItem[] }>("/api/lookups/classes", fetcher);
   const { data: spData } = useSWR<{ items: LookupItem[] }>("/api/lookups/specializations", fetcher);
@@ -76,7 +75,6 @@ export function AssignmentsClient() {
   const [teacherId, setTeacherId] = useState("");
   const [subject, setSubject] = useState("");
   const [lessonName, setLessonName] = useState("");
-  const [yearGroup, setYearGroup] = useState<number | "">("");
   const [gradeLevel, setGradeLevel] = useState("");
   const [classId, setClassId] = useState("");
   const [specializationId, setSpecializationId] = useState("");
@@ -89,7 +87,6 @@ export function AssignmentsClient() {
   const [editDraft, setEditDraft] = useState<{
     subject: string;
     lesson_name: string;
-    year_group: number;
     grade_level: string;
     teaching_mode: TeachingMode | "";
   } & TargetDraft | null>(null);
@@ -116,7 +113,7 @@ export function AssignmentsClient() {
     e.preventDefault();
     if (readOnly) return alert("שנה בארכיון — צפייה בלבד");
     if (!teacherId) return alert("בחרי מורה");
-    if (!yearGroup || !gradeLevel) return alert("בחרי שנתון ושכבה");
+    if (!gradeLevel) return alert("בחרי שכבה");
     if (!assignmentCategory) return alert("בחרי סוג שיבוץ: חובה או התמחות");
     if (assignmentCategory === "התמחות") {
       if (!specializationId) return alert("בחרי התמחות");
@@ -132,7 +129,6 @@ export function AssignmentsClient() {
           teacher_id: teacherId,
           subject,
           lesson_name: lessonName.trim() || null,
-          year_group: yearGroup,
           grade_level: gradeLevel,
           assignment_category: assignmentCategory,
           class_id: assignmentCategory === "חובה" ? classId || null : null,
@@ -147,7 +143,6 @@ export function AssignmentsClient() {
       setTeacherId("");
       setSubject("");
       setLessonName("");
-      setYearGroup("");
       setGradeLevel("");
       setClassId("");
       setSpecializationId("");
@@ -168,7 +163,6 @@ export function AssignmentsClient() {
     setEditDraft({
       subject: a.subject,
       lesson_name: a.lesson_name ?? "",
-      year_group: a.year_group,
       grade_level: a.grade_level,
       assignment_category: a.assignment_category,
       class_id: a.class_id ?? "",
@@ -201,7 +195,6 @@ export function AssignmentsClient() {
         body: JSON.stringify({
           subject: editDraft.subject,
           lesson_name: editDraft.lesson_name.trim() || null,
-          year_group: editDraft.year_group,
           grade_level: editDraft.grade_level,
           assignment_category: editDraft.assignment_category,
           class_id: editDraft.assignment_category === "חובה" ? editDraft.class_id || null : null,
@@ -307,21 +300,17 @@ export function AssignmentsClient() {
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium text-zinc-700">שנתון / שכבה *</span>
+          <span className="text-sm font-medium text-zinc-700">שכבה *</span>
           <select
             required
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-            value={gradeLevel && yearGroup ? `${yearGroup}:${gradeLevel}` : ""}
-            onChange={(e) => {
-              const [yg, gl] = e.target.value.split(":");
-              setYearGroup(yg ? Number.parseInt(yg, 10) : "");
-              setGradeLevel(gl ?? "");
-            }}
+            value={gradeLevel}
+            onChange={(e) => setGradeLevel(e.target.value)}
           >
             <option value="">— בחרי —</option>
-            {(aData?.layers ?? []).map((l) => (
-              <option key={l.grade_level} value={`${l.year_group}:${l.grade_level}`}>
-                {l.label}
+            {(aData?.grades ?? []).map((g) => (
+              <option key={g.grade_level} value={g.grade_level}>
+                {g.label}
               </option>
             ))}
           </select>
@@ -493,7 +482,7 @@ export function AssignmentsClient() {
               <TableHead>שם שיעור</TableHead>
               <TableHead>סוג שיבוץ</TableHead>
               <TableHead>ערך שיבוץ</TableHead>
-              <TableHead>שנתון</TableHead>
+              <TableHead>שכבה</TableHead>
               <TableHead className="w-[1%] whitespace-nowrap" />
             </TableRow>
           </TableHeader>
@@ -647,23 +636,18 @@ export function AssignmentsClient() {
                     {isEditing ? (
                       <div className="flex flex-wrap items-center gap-1">
                         <select
-                          value={`${editDraft.year_group}:${editDraft.grade_level}`}
-                          onChange={(e) => {
-                            const [yg, gl] = e.target.value.split(":");
+                          value={editDraft.grade_level}
+                          onChange={(e) =>
                             setEditDraft({
                               ...editDraft,
-                              year_group: yg ? Number.parseInt(yg, 10) : editDraft.year_group,
-                              grade_level: gl ?? editDraft.grade_level,
-                            });
-                          }}
+                              grade_level: e.target.value,
+                            })
+                          }
                           className="rounded border border-zinc-200 px-2 py-1 text-sm"
                         >
-                          {(aData?.layers ?? []).map((l) => (
-                            <option
-                              key={`${l.year_group}:${l.grade_level}`}
-                              value={`${l.year_group}:${l.grade_level}`}
-                            >
-                              {l.label}
+                          {(aData?.grades ?? []).map((g) => (
+                            <option key={g.grade_level} value={g.grade_level}>
+                              {g.label}
                             </option>
                           ))}
                         </select>
@@ -686,7 +670,7 @@ export function AssignmentsClient() {
                       </div>
                     ) : (
                       <>
-                        {a.year_label ?? `שנתון ${a.year_group} — שכבה ${a.grade_level}`}
+                        {a.year_label ?? `שכבה ${a.grade_level}`}
                         {a.teaching_mode ? ` · ${teachingModeLabel(a.teaching_mode)}` : ""}
                       </>
                     )}

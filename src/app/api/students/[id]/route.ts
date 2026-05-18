@@ -108,7 +108,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: before } = await supabase
     .from("students")
-    .select("class_id, specialization_id, track_id, year_group, grade_level")
+    .select("class_id, specialization_id, track_id, grade_level")
     .eq("id", id)
     .single();
 
@@ -129,7 +129,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     ...extra.patch,
   };
 
-  if (body.year_group !== undefined) patch.year_group = Number(body.year_group);
   if (body.grade_level !== undefined) {
     const gl = parseGradeLevel(String(body.grade_level));
     if (!gl) return NextResponse.json({ error: "שכבה לא תקינה" }, { status: 400 });
@@ -149,7 +148,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     await recordStudentHistoryIfChanged(
       supabase,
       id,
-      before as Pick<typeof after, "class_id" | "specialization_id" | "track_id" | "year_group" | "grade_level">,
+      before as Pick<typeof after, "class_id" | "specialization_id" | "track_id" | "grade_level">,
       after,
       user?.id ?? null,
     );

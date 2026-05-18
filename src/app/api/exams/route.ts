@@ -18,7 +18,7 @@ import { assertNoDuplicateExam } from "@/lib/validations/exams";
 import type { GradeLevel } from "@/lib/types/db";
 import { notDeleted } from "@/lib/db/softDelete";
 import { buildExamStudentRows } from "@/lib/exams/snapshots";
-import { parseGradeLevel } from "@/lib/academicYears/labels";
+import { formatGradeLabel, parseGradeLevel } from "@/lib/academicYears/labels";
 import {
   readOnlyResponse,
   resolveAcademicYearScope,
@@ -33,8 +33,6 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const gradeLevel = parseGradeLevel(searchParams.get("grade_level") ?? "");
-  const yearGroupRaw = searchParams.get("year_group");
-  const yearGroup = yearGroupRaw ? Number.parseInt(yearGroupRaw, 10) : NaN;
 
   const supabase = createSupabaseAdminClient();
   const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
@@ -45,7 +43,6 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false });
 
   if (gradeLevel) query = query.eq("grade_level", gradeLevel);
-  if (Number.isFinite(yearGroup)) query = query.eq("year_group", yearGroup);
 
   const { data, error } = await query;
 
@@ -72,11 +69,11 @@ export async function GET(request: Request) {
   );
 
   const enriched = exams.map((e) => {
-    const row = e as { id: string; year_group: number; grade_level: GradeLevel };
+    const row = e as { id: string; grade_level: GradeLevel };
     return {
       ...e,
       target_label: labels[row.id] ?? row.id,
-      year_label: `שנתון ${row.year_group} — שכבה ${row.grade_level}`,
+      year_label: formatGradeLabel(row.grade_level),
     };
   });
 
@@ -88,7 +85,6 @@ export async function POST(request: Request) {
     teacher_id?: string;
     subject?: string;
     exam_date?: string;
-    year_group?: number;
     grade_level?: string;
     teacher_assignment_id?: string;
     class_id?: string | null;
@@ -103,14 +99,13 @@ export async function POST(request: Request) {
   const subject = (body.subject ?? "").trim();
   const exam_date = (body.exam_date ?? "").trim();
   const teacher_assignment_id = (body.teacher_assignment_id ?? "").trim();
-  const year_group = Number(body.year_group);
   const grade_level = parseGradeLevel(String(body.grade_level ?? ""));
 
   if (!teacher_id || !subject || !exam_date) {
     return NextResponse.json({ error: "כל השדות חובה" }, { status: 400 });
   }
-  if (!Number.isFinite(year_group) || !grade_level) {
-    return NextResponse.json({ error: "שנתון ושכבה חובה" }, { status: 400 });
+  if (!grade_level) {
+    return NextResponse.json({ error: "שכבה חובה" }, { status: 400 });
   }
 
   const supabase = createSupabaseAdminClient();
@@ -139,7 +134,6 @@ export async function POST(request: Request) {
 
   const scope = {
     academic_year_id: yearScope.year.id,
-    year_group,
     grade_level,
   };
   let assignmentId = teacher_assignment_id;
@@ -149,7 +143,7 @@ export async function POST(request: Request) {
     const { data: ta } = await supabase
       .from("teacher_assignments")
       .select(
-        "id, academic_year_id, year_group, grade_level, teacher_id, subject, assignment_category, class_id, specialization_id, track_id, psychology_enabled, teaching_mode",
+        "id, academic_year_id, grade_level, teacher_id, subject, assignment_category, class_id, specialization_id, track_id, psychology_enabled, teaching_mode",
       )
       .eq("id", assignmentId)
       .maybeSingle();
@@ -157,8 +151,8 @@ export async function POST(request: Request) {
     if (ta.academic_year_id !== yearScope.year.id) {
       return NextResponse.json({ error: "שיבוץ לא שייך לשנה הנוכחית" }, { status: 400 });
     }
-    if (ta.year_group !== year_group || ta.grade_level !== grade_level) {
-      return NextResponse.json({ error: "שיבוץ לא תואם לשנתון/שכבה" }, { status: 400 });
+    if (ta.grade_level !== grade_level) {
+      return NextResponse.json({ error: "שיבוץ לא תואם לשכבה" }, { status: 400 });
     }
     if (ta.teacher_id !== teacher_id || ta.subject !== subject) {
       return NextResponse.json({ error: "שיבוץ לא תואם למורה/מקצוע" }, { status: 400 });
@@ -175,7 +169,6 @@ export async function POST(request: Request) {
       .eq("teacher_id", teacher_id)
       .eq("subject", subject)
       .eq("academic_year_id", yearScope.year.id)
-      .eq("year_group", year_group)
       .eq("grade_level", grade_level)
       .is("deleted_at", null);
 
@@ -204,14 +197,13 @@ export async function POST(request: Request) {
   }
 
   if (!assignmentId) {
-    return NextResponse.json({ error: "לא נמצא שיבוץ לשנתון/שכבה" }, { status: 400 });
+    return NextResponse.json({ error: "לא נמצא שיבוץ לשכבה" }, { status: 400 });
   }
 
   const targetErr = validateAssignmentWithCategory(examCategory, examTarget);
   if (targetErr) return NextResponse.json({ error: targetErr }, { status: 400 });
 
   const dup = await assertNoDuplicateExam(supabase, {
-    yearGroup: year_group,
     gradeLevel: grade_level,
     teacherId: teacher_id,
     subject,
@@ -251,7 +243,7 @@ export async function POST(request: Request) {
   );
   if (stErr) return NextResponse.json({ error: stErr }, { status: 500 });
   if (!studentIds.length) {
-    return NextResponse.json({ error: "לא נמצאו תלמידות לפי היעד ושנתון/שכבה" }, { status: 400 });
+    return NextResponse.json({ error: "לא נמצאו תלמידות לפי היעד והשכבה" }, { status: 400 });
   }
 
   const insertRow: Record<string, unknown> = {
@@ -264,7 +256,6 @@ export async function POST(request: Request) {
     specialization_id: examTarget.specialization_id,
     track_id: examTarget.track_id,
     psychology_enabled: examTarget.psychology_enabled,
-    year_group,
     grade_level,
     teacher_assignment_id: assignmentId,
   };
@@ -303,7 +294,6 @@ export async function POST(request: Request) {
     studentIds,
     teacherName,
     subject,
-    yearGroup: year_group,
     gradeLevel: grade_level,
     academicYearName: yearScope.year.year_name,
     targetName: targetLabels[examId] ?? null,
@@ -326,7 +316,6 @@ export async function POST(request: Request) {
       subject,
       exam_date,
       ...examTarget,
-      year_group,
       grade_level,
       teacher_assignment_id: assignmentId,
     },

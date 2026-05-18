@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { enrichStudentsWithGrade, formatCohortGradeLabel } from "@/lib/academic/studentGrade";
-import { formatYearGradeLabel } from "@/lib/academicYears/labels";
+import { formatGradeLabel } from "@/lib/academicYears/labels";
 import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/db/assignmentSelect";
 import { notDeleted } from "@/lib/db/softDelete";
@@ -120,8 +120,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         תעודת_זהות: s.tz,
         שם_פרטי: s.first_name,
         שם_משפחה: s.last_name,
-        שנתון_ושכבה: s.year_label ?? formatYearGradeLabel(s.year_group, s.grade_level),
-        שכבה: formatCohortGradeLabel(s.grade_level),
+        שכבה: s.year_label ?? formatCohortGradeLabel(s.grade_level),
         כיתה: pickLookupName(s.classes),
         התמחות: pickLookupName(s.specializations),
         מסלול: pickLookupName(s.tracks),
@@ -159,7 +158,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const data = await paginateSelect((from, to) =>
         supabase
           .from("exams")
-          .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
+          .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
           .eq("academic_year_id", scope.year.id)
           .order("exam_date", { ascending: false })
           .range(from, to),
@@ -176,12 +175,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         })),
       );
       const rows = exams.map((e) => {
-        const row = e as ExamJoin & { year_group: number; grade_level: string };
+        const row = e as ExamJoin & { grade_level: string };
         return {
           מקצוע: e.subject,
           תאריך: e.exam_date,
           מורה: teacherNameCell(e.teachers),
-          שנתון_ושכבה: formatYearGradeLabel(row.year_group, row.grade_level as "א" | "ב" | "ג"),
+          שכבה: formatGradeLabel(row.grade_level as "א" | "ב" | "ג"),
           סוג_יעד: assignmentTargetTypeLabel(e),
           שם_יעד: labels[e.id] ?? "—",
         };
@@ -199,7 +198,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const raw = data as (ExamJoin & {
         lesson_name?: string | null;
         teaching_mode?: string | null;
-        year_group: number;
         grade_level: string;
       })[];
       const labels = await resolveExamTargetLabels(
@@ -224,7 +222,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           מורה: teacherNameCell(a.teachers),
           מקצוע: a.subject,
           שם_שיעור: a.lesson_name ?? "",
-          שנתון_ושכבה: formatYearGradeLabel(a.year_group, a.grade_level as "א" | "ב" | "ג"),
+          שכבה: formatGradeLabel(a.grade_level as "א" | "ב" | "ג"),
           סוג_שיבוץ: row.assignment_category ?? "—",
           סוג_יעד: assignmentTargetTypeLabel(targetCols, row.assignment_category),
           ערך_שיבוץ: labels[a.id] ?? "—",

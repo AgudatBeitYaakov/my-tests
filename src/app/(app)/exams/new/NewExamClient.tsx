@@ -21,7 +21,6 @@ type AssignmentRow = {
   subject: string;
   lesson_name?: string | null;
   teaching_mode?: TeachingMode | null;
-  year_group: number;
   grade_level: string;
   year_label?: string;
   track_id: string | null;
@@ -87,7 +86,6 @@ export function NewExamClient() {
           teacher_id: teacherId,
           subject: selected.subject,
           exam_date: examDate,
-          year_group: selected.year_group,
           grade_level: selected.grade_level,
           teacher_assignment_id: selected.id,
           teaching_track_type: isTeachingTarget ? teachingTrackType : null,
@@ -111,7 +109,7 @@ export function NewExamClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">יצירת מבחן</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            בחירת מורה → שיבוץ → תאריך. שנתון ושכבה נלקחים מהשיבוץ.
+            בחירת מורה → שיבוץ → תאריך. השכבה נלקחת מהשיבוץ.
             {viewingYear ? ` (${viewingYear.year_name})` : ""}
           </p>
         </div>
@@ -126,7 +124,7 @@ export function NewExamClient() {
       <form onSubmit={submit} className="grid max-w-xl gap-4 rounded-xl border border-zinc-200 bg-white p-6">
         {selected ? (
           <p className="rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900">
-            {selected.year_label ?? `שנתון ${selected.year_group} — שכבה ${selected.grade_level}`}
+            {selected.year_label ?? `שכבה ${selected.grade_level}`}
           </p>
         ) : null}
 

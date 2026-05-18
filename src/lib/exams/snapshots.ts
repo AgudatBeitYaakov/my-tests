@@ -25,7 +25,6 @@ export async function buildExamStudentRows(
     studentIds: string[];
     teacherName: string;
     subject: string;
-    yearGroup: number;
     gradeLevel: GradeLevel;
     academicYearName: string | null;
     targetName: string | null;
@@ -59,7 +58,6 @@ export async function buildExamStudentRows(
       teaching_track_type_snapshot: tType ? teachingTrackTypeLabel(tType) : null,
       teacher_snapshot: params.teacherName,
       subject_snapshot: params.subject,
-      year_group_snapshot: String(params.yearGroup),
       grade_level_snapshot: params.gradeLevel,
       academic_year_name_snapshot: params.academicYearName,
       target_name_snapshot: params.targetName,

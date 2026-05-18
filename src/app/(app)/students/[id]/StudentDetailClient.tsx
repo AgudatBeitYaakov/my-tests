@@ -88,8 +88,7 @@ export function StudentDetailClient({ id }: { id: string }) {
           <p className="mt-1 text-sm text-zinc-600">
             ת״ז <span dir="ltr" className="font-mono">{s.tz}</span>
             {" · "}
-            {(s as { year_label?: string }).year_label ??
-              `שנתון ${s.year_group} — שכבה ${formatCohortGradeLabel(s.grade_level)}`}
+            {(s as { year_label?: string }).year_label ?? formatCohortGradeLabel(s.grade_level)}
             · כיתה {pickLookupName(s.classes)}
             {pickLookupName(s.tracks) !== "—" ? ` · מסלול ${pickLookupName(s.tracks)}` : ""}
             {pickLookupName(s.specializations) !== "—" ? ` · התמחות ${pickLookupName(s.specializations)}` : ""}

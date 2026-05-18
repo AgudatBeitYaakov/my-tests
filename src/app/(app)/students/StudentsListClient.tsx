@@ -246,8 +246,7 @@ export function StudentsListClient() {
                     {s.tz}
                   </TableCell>
                   <TableCell>
-                    {(s as { year_label?: string }).year_label ??
-                      `שנתון ${s.year_group} — שכבה ${s.grade_level}`}
+                    {(s as { year_label?: string }).year_label ?? `שכבה ${s.grade_level}`}
                   </TableCell>
                   <TableCell>{pickLookupName(s.classes)}</TableCell>
                   <TableCell>{pickLookupName(s.tracks)}</TableCell>
