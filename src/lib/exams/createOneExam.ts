@@ -1,9 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { writeAudit } from "@/lib/audit/log";
-import {
-  normalizeTargetInput,
-  validateAssignmentWithCategory,
-} from "@/lib/assignments/target";
+import { validateAssignmentWithCategory } from "@/lib/assignments/target";
 import type { AssignmentCategory } from "@/lib/types/db";
 import {
   assertTeacherAssignmentMatchesExam,

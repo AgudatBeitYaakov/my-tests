@@ -12,6 +12,7 @@ import { assignmentTargetTypeLabel } from "@/lib/assignments/target";
 import { TEACHER_EMBED_IN_EXAM } from "@/lib/teachers/db";
 import { teacherDisplayName, teacherEmbedDisplayName, teachingModeLabel } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { examTrackingDueDate } from "@/lib/tracking/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -320,25 +321,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         };
         const ex = examsBy[row.exam_id];
         const examDate = ex?.exam_date ?? "";
-        const dueBefore = examDate
-          ? (() => {
-              const d = new Date(`${examDate}T12:00:00`);
-              d.setDate(d.getDate() - 7);
-              return d.toISOString().slice(0, 10);
-            })()
-          : "";
-        const dueAfter = examDate
-          ? (() => {
-              const d = new Date(`${examDate}T12:00:00`);
-              d.setDate(d.getDate() + 7);
-              return d.toISOString().slice(0, 10);
-            })()
-          : "";
         return {
           מקצוע: ex?.subject ?? "",
-          הגשת_המבחן: dueBefore,
+          הגשת_המבחן: examTrackingDueDate(examDate, -7),
           תאריך: examDate,
-          הגשת_ציונים: dueAfter,
+          הגשת_ציונים: examTrackingDueDate(examDate, 7),
           מורה: ex ? teacherNameCell(ex.teachers) : "",
           הוגש_מבחן: row.submitted_exam ? row.submitted_exam.slice(0, 19) : "",
           אושר_על_ידי_רכזת: row.approved_by_coordinator ? "כן" : "לא",

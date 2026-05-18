@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
+import type { GradeLevel } from "@/lib/academicYears/types";
 import { Spinner } from "@/components/ui/Spinner";
 import { TeacherSearchCombobox } from "@/components/teachers/TeacherSearchCombobox";
 import { TEACHING_TRACK_NAME } from "@/lib/students/fields";
@@ -28,11 +29,18 @@ type AssignmentRow = {
   target_type_label?: string;
 };
 
+type GradeLevelOption = {
+  id: string;
+  name: string;
+  grade_levels: GradeLevel[];
+};
+
 export function NewExamClient() {
   const router = useRouter();
   const { viewingYear, readOnly } = useAcademicYear();
 
   const [teacherId, setTeacherId] = useState("");
+  const [gradeLevelOptionId, setGradeLevelOptionId] = useState("");
   const assignUrl = useMemo(() => {
     if (!teacherId) return null;
     const p = new URLSearchParams({ teacher_id: teacherId });
@@ -40,8 +48,20 @@ export function NewExamClient() {
   }, [teacherId, viewingYear?.id]);
 
   const { data: aData, isLoading: aLoad } = useSWR<{ assignments: AssignmentRow[] }>(assignUrl, fetcher);
+  const { data: gradeData } = useSWR<{ items: GradeLevelOption[] }>(
+    "/api/lookups/grade-level-options",
+    fetcher,
+  );
 
-  const activeAssignments = useMemo(() => aData?.assignments ?? [], [aData]);
+  const gradeOptions = gradeData?.items ?? [];
+  const selectedGradeOption = gradeOptions.find((o) => o.id === gradeLevelOptionId);
+
+  const activeAssignments = useMemo(() => {
+    const all = aData?.assignments ?? [];
+    if (!selectedGradeOption?.grade_levels?.length) return all;
+    const levels = new Set(selectedGradeOption.grade_levels);
+    return all.filter((a) => levels.has(a.grade_level as GradeLevel));
+  }, [aData, selectedGradeOption]);
 
   const [assignmentId, setAssignmentId] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -59,6 +79,10 @@ export function NewExamClient() {
       selected?.target_label?.includes(TEACHING_TRACK_NAME));
 
   useEffect(() => {
+    setAssignmentId("");
+  }, [teacherId, gradeLevelOptionId]);
+
+  useEffect(() => {
     if (selected?.teaching_mode) {
       setTeachingTrackType(selected.teaching_mode);
     } else if (!isTeachingTarget) {
@@ -69,8 +93,8 @@ export function NewExamClient() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (readOnly) return alert("שנה בארכיון — צפייה בלבד");
-    if (!teacherId || !selected || !examDate) {
-      alert("מלאי את כל השדות");
+    if (!teacherId || !gradeLevelOptionId || !selected || !examDate) {
+      alert("מלאי מורה, שכבה, שיבוץ ותאריך");
       return;
     }
     if (isTeachingTarget && !teachingTrackType) {
@@ -86,7 +110,7 @@ export function NewExamClient() {
           teacher_id: teacherId,
           subject: selected.subject,
           exam_date: examDate,
-          grade_level: selected.grade_level,
+          grade_level_option_id: gradeLevelOptionId,
           teacher_assignment_id: selected.id,
           teaching_track_type: isTeachingTarget ? teachingTrackType : null,
         }),
@@ -94,6 +118,12 @@ export function NewExamClient() {
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j as { error?: string }).error ?? "שגיאה");
       const examId = (j as { exam?: { id: string } }).exam?.id;
+      const createdCount = (j as { created_count?: number }).created_count ?? 1;
+      if (createdCount > 1) {
+        alert(`נוצרו ${createdCount} מבחנים (לפי השכבות שנבחרו)`);
+        router.push("/exams");
+        return;
+      }
       if (examId) router.push(`/exams/${examId}`);
       else router.push("/exams");
     } catch (err) {
@@ -109,7 +139,7 @@ export function NewExamClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">יצירת מבחן</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            בחירת מורה → שיבוץ → תאריך. השכבה נלקחת מהשיבוץ.
+            מורה → שכבה → שיבוץ → תאריך. בחירת «א+ב» יוצרת מבחן נפרד לכל שכבה באותו יעד.
             {viewingYear ? ` (${viewingYear.year_name})` : ""}
           </p>
         </div>
@@ -122,22 +152,39 @@ export function NewExamClient() {
       </div>
 
       <form onSubmit={submit} className="grid max-w-xl gap-4 rounded-xl border border-zinc-200 bg-white p-6">
-        {selected ? (
-          <p className="rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900">
-            {selected.year_label ?? `שכבה ${selected.grade_level}`}
-          </p>
-        ) : null}
-
         <TeacherSearchCombobox
           value={teacherId}
           onChange={(id) => {
             setTeacherId(id);
-            setAssignmentId("");
+            setGradeLevelOptionId("");
           }}
           disabled={readOnly}
           required
           label="מורה"
         />
+
+        <label className="block">
+          <span className="text-sm font-medium text-zinc-700">שכבה *</span>
+          <select
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            value={gradeLevelOptionId}
+            onChange={(e) => setGradeLevelOptionId(e.target.value)}
+            required
+            disabled={!teacherId || readOnly}
+          >
+            <option value="">— בחרי —</option>
+            {gradeOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+          {!gradeOptions.length ? (
+            <p className="mt-1 text-xs text-amber-800">
+              אין שכבות בלוקאפ — הוסיפי בהגדרות → שכבות
+            </p>
+          ) : null}
+        </label>
 
         <label className="block">
           <span className="text-sm font-medium text-zinc-700">שיבוץ (מקצוע · יעד)</span>
@@ -149,7 +196,7 @@ export function NewExamClient() {
               setTeachingTrackType("");
             }}
             required
-            disabled={!teacherId || readOnly}
+            disabled={!teacherId || !gradeLevelOptionId || readOnly}
           >
             <option value="">— בחרי —</option>
             {activeAssignments.map((a) => (
@@ -164,13 +211,15 @@ export function NewExamClient() {
               </option>
             ))}
           </select>
-          {teacherId && aLoad ? (
+          {teacherId && gradeLevelOptionId && aLoad ? (
             <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
               <Spinner className="size-4" />
               טוען שיבוצים…
             </div>
-          ) : teacherId && !aLoad && !activeAssignments.length ? (
-            <p className="mt-1 text-xs text-amber-800">אין שיבוצים פעילים למורה בשנה זו</p>
+          ) : teacherId && gradeLevelOptionId && !aLoad && !activeAssignments.length ? (
+            <p className="mt-1 text-xs text-amber-800">
+              אין שיבוצים תואמים למורה ולשכבה שנבחרו
+            </p>
           ) : null}
         </label>
 
