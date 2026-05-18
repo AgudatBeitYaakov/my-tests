@@ -11,7 +11,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 
   const { data: exam, error: eErr } = await supabase
     .from("exams")
-    .select("*, teachers(name)")
+    .select("*, teachers ( id, first_name, last_name, full_name_generated )")
     .eq("id", id)
     .is("deleted_at", null)
     .single();

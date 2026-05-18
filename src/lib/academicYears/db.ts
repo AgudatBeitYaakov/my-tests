@@ -10,7 +10,4 @@ export async function getStudentWithLookupsSelect() {
   return STUDENT_WITH_LOOKUPS;
 }
 
-export const ASSIGNMENT_WITH_LOOKUPS = `
-  *,
-  teachers ( id, name )
-`;
+export { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/teachers/db";

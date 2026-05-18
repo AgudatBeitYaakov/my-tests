@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const examsQ = notDeleted(
     supabase
       .from("exams")
-      .select("id, subject, exam_date, year_group, grade_level, teachers(name)")
+      .select("id, subject, exam_date, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
       .eq("academic_year_id", scope.year.id)
       .limit(8),
   ).ilike("subject", `%${escaped}%`);

@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { TeacherFormFields } from "@/components/teachers/TeacherFormFields";
 import { hasAppSession } from "@/lib/auth/passwordSession";
+import { notDeleted } from "@/lib/db/softDelete";
+import { TEACHER_COLUMNS } from "@/lib/teachers/db";
+import { parseTeacherBody } from "@/lib/teachers/validation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -8,16 +12,34 @@ export const dynamic = "force-dynamic";
 export default async function EditTeacherPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = createSupabaseAdminClient();
-  const { data: teacher, error } = await supabase.from("teachers").select("*").eq("id", id).single();
+  const { data: teacher, error } = await notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS))
+    .eq("id", id)
+    .single();
   if (error || !teacher) redirect("/teachers");
 
   async function updateTeacher(formData: FormData) {
     "use server";
     if (!(await hasAppSession())) redirect("/login");
-    const name = String(formData.get("name") ?? "").trim();
-    if (!name) throw new Error("שם חובה");
+    const parsed = parseTeacherBody({
+      first_name: formData.get("first_name"),
+      last_name: formData.get("last_name"),
+      tz: formData.get("tz"),
+      email: formData.get("email"),
+      notes: formData.get("notes"),
+    });
+    if (parsed.error) throw new Error(parsed.error);
+
     const sb = createSupabaseAdminClient();
-    const { error: uErr } = await sb.from("teachers").update({ name }).eq("id", id);
+    const { error: uErr } = await sb
+      .from("teachers")
+      .update({
+        first_name: parsed.first_name,
+        last_name: parsed.last_name,
+        tz: parsed.tz,
+        email: parsed.email,
+        notes: parsed.notes,
+      })
+      .eq("id", id);
     if (uErr) throw new Error(uErr.message);
     redirect("/teachers");
   }
@@ -33,17 +55,12 @@ export default async function EditTeacherPage({ params }: { params: Promise<{ id
         </Link>
       </div>
 
-      <form action={updateTeacher} className="max-w-md space-y-4 rounded-2xl border border-zinc-200 bg-white p-6">
-        <label className="block">
-          <div className="text-sm font-medium">שם</div>
-          <input
-            name="name"
-            required
-            defaultValue={teacher.name}
-            className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400"
-          />
-        </label>
-        <div className="flex justify-end pt-2">
+      <form
+        action={updateTeacher}
+        className="grid max-w-2xl gap-4 rounded-2xl border border-zinc-200 bg-white p-6 md:grid-cols-2"
+      >
+        <TeacherFormFields defaults={teacher} />
+        <div className="flex justify-end md:col-span-2">
           <button type="submit" className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white">
             שמירה
           </button>

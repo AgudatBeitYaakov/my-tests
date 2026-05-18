@@ -9,7 +9,8 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { NotesButton } from "@/components/ui/NotesButton";
 import { PrintButton } from "@/components/PrintButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
-import type { ExamStudentStatus } from "@/lib/types/db";
+import { teacherEmbedDisplayName } from "@/lib/teachers/display";
+import type { ExamStudentStatus, Teacher } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error("שגיאת טעינה");
@@ -107,7 +108,8 @@ export function ExamEditClient({ id }: { id: string }) {
         <div>
           <h1 className="text-2xl font-semibold">עדכון מבחן</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            {e.subject} · {e.exam_date} · {e.teachers?.name ?? ""} · יעד: {e.target_label ?? e.target_id}
+            {e.subject} · {e.exam_date} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
+            {e.target_label ?? e.target_id}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

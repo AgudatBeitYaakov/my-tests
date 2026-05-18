@@ -18,6 +18,8 @@ import {
   resolveAcademicYearScope,
   scopeFromSearchParams,
 } from "@/lib/academicYears/scope";
+import { TEACHER_EMBED_IN_EXAM } from "@/lib/teachers/db";
+import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
   const supabase = createSupabaseAdminClient();
   const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
 
-  let query = notDeleted(supabase.from("exams").select("*, teachers(name)"))
+  let query = notDeleted(supabase.from("exams").select(`*, ${TEACHER_EMBED_IN_EXAM}`))
     .eq("academic_year_id", scope.year.id)
     .order("exam_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -120,11 +122,12 @@ export async function POST(request: Request) {
     grade_level,
   };
   let assignmentId = teacher_assignment_id;
+  let assignmentTeachingMode: "full" | "short" | null = null;
 
   if (assignmentId) {
     const { data: ta } = await supabase
       .from("teacher_assignments")
-      .select("id, academic_year_id, year_group, grade_level, teacher_id, subject, target_type, target_id")
+      .select("id, academic_year_id, year_group, grade_level, teacher_id, subject, target_type, target_id, teaching_mode")
       .eq("id", assignmentId)
       .maybeSingle();
     if (!ta) return NextResponse.json({ error: "שיבוץ לא נמצא" }, { status: 400 });
@@ -137,10 +140,11 @@ export async function POST(request: Request) {
     if (ta.teacher_id !== teacher_id || ta.subject !== subject) {
       return NextResponse.json({ error: "שיבוץ לא תואם למורה/מקצוע" }, { status: 400 });
     }
+    assignmentTeachingMode = (ta.teaching_mode as "full" | "short" | null) ?? null;
   } else {
     const { data: assignment } = await supabase
       .from("teacher_assignments")
-      .select("id")
+      .select("id, teaching_mode")
       .eq("teacher_id", teacher_id)
       .eq("subject", subject)
       .eq("academic_year_id", yearScope.year.id)
@@ -151,6 +155,7 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
     assignmentId = (assignment?.id as string) ?? "";
+    assignmentTeachingMode = (assignment?.teaching_mode as "full" | "short" | null) ?? null;
   }
 
   if (!assignmentId) {
@@ -177,6 +182,10 @@ export async function POST(request: Request) {
     scope,
   );
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+
+  if (assignmentTeachingMode && !teaching_track_type) {
+    teaching_track_type = assignmentTeachingMode;
+  }
 
   if (target_type === "track") {
     const teachingTrack = await isTeachingTrackId(supabase, target_id);
@@ -230,8 +239,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: trErr.message }, { status: 400 });
   }
 
-  const { data: teacherRow } = await supabase.from("teachers").select("name").eq("id", teacher_id).single();
-  const teacherName = (teacherRow?.name as string) ?? "";
+  const { data: teacherRow } = await supabase
+    .from("teachers")
+    .select("first_name, last_name, full_name_generated")
+    .eq("id", teacher_id)
+    .single();
+  const teacherName = teacherEmbedDisplayName(teacherRow);
 
   const targetLabels = await resolveExamTargetLabels(supabase, [
     { id: examId, target_type, target_id: resolvedTargetId },

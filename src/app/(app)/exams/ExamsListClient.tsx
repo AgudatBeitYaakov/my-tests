@@ -14,6 +14,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { teacherEmbedDisplayName } from "@/lib/teachers/display";
+import type { Teacher } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error("שגיאת טעינה");
@@ -27,7 +29,7 @@ type ExamRow = {
   target_type: string;
   target_id: string;
   target_label?: string;
-  teachers: { name: string } | null;
+  teachers: Teacher | null;
 };
 
 const targetLabel: Record<string, string> = {
@@ -94,7 +96,7 @@ export function ExamsListClient() {
             {data?.exams?.length ? (
               data.exams.map((e) => (
                 <TableRow key={e.id}>
-                  <TableCell>{e.teachers?.name ?? "—"}</TableCell>
+                  <TableCell>{teacherEmbedDisplayName(e.teachers as Teacher | null)}</TableCell>
                   <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{e.subject}</TableCell>
                   <TableCell>{e.exam_date}</TableCell>
                   <TableCell className="text-slate-600 dark:text-zinc-300">

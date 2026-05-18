@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { Spinner } from "@/components/ui/Spinner";
+import { TeacherSearchCombobox } from "@/components/teachers/TeacherSearchCombobox";
 import { TEACHING_TRACK_NAME } from "@/lib/students/fields";
-import type { ExamTargetType, Teacher, TeachingTrackType } from "@/lib/types/db";
+import { teachingModeLabel } from "@/lib/teachers/display";
+import type { ExamTargetType, TeachingMode, TeachingTrackType } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error("שגיאת טעינה");
@@ -17,6 +19,8 @@ const fetcher = (url: string) => fetch(url).then((r) => {
 type AssignmentRow = {
   id: string;
   subject: string;
+  lesson_name?: string | null;
+  teaching_mode?: TeachingMode | null;
   year_group: number;
   grade_level: string;
   year_label?: string;
@@ -29,8 +33,6 @@ type AssignmentRow = {
 export function NewExamClient() {
   const router = useRouter();
   const { viewingYear, readOnly } = useAcademicYear();
-
-  const { data: tData, isLoading: tLoad } = useSWR<{ teachers: Teacher[] }>("/api/teachers", fetcher);
 
   const [teacherId, setTeacherId] = useState("");
   const assignUrl = useMemo(() => {
@@ -56,6 +58,14 @@ export function NewExamClient() {
   const isTeachingTarget =
     selected?.target_type === "track" &&
     (selected.target_label === TEACHING_TRACK_NAME || selected.target_label?.includes(TEACHING_TRACK_NAME));
+
+  useEffect(() => {
+    if (selected?.teaching_mode) {
+      setTeachingTrackType(selected.teaching_mode);
+    } else if (!isTeachingTarget) {
+      setTeachingTrackType("");
+    }
+  }, [selected?.id, selected?.teaching_mode, isTeachingTarget]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,32 +132,16 @@ export function NewExamClient() {
           </p>
         ) : null}
 
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">מורה</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
-            value={teacherId}
-            onChange={(e) => {
-              setTeacherId(e.target.value);
-              setAssignmentId("");
-            }}
-            required
-            disabled={readOnly}
-          >
-            <option value="">— בחרי —</option>
-            {tData?.teachers?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          {tLoad ? (
-            <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
-              <Spinner className="size-4" />
-              טוען…
-            </div>
-          ) : null}
-        </label>
+        <TeacherSearchCombobox
+          value={teacherId}
+          onChange={(id) => {
+            setTeacherId(id);
+            setAssignmentId("");
+          }}
+          disabled={readOnly}
+          required
+          label="מורה"
+        />
 
         <label className="block">
           <span className="text-sm font-medium text-zinc-700">שיבוץ (מקצוע · יעד)</span>
@@ -165,7 +159,11 @@ export function NewExamClient() {
             {activeAssignments.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.year_label ? `${a.year_label} · ` : ""}
-                {a.subject} · {a.target_type_label ?? a.target_type}: {a.target_label ?? a.target_id}
+                {a.subject}
+                {a.lesson_name ? ` · ${a.lesson_name}` : ""}
+                {a.teaching_mode ? ` · ${teachingModeLabel(a.teaching_mode)}` : ""}
+                {" · "}
+                {a.target_type_label ?? a.target_type}: {a.target_label ?? a.target_id}
               </option>
             ))}
           </select>

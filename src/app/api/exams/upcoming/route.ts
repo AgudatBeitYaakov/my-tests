@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   const supabase = createSupabaseAdminClient();
   const { data: exams, error } = await supabase
     .from("exams")
-    .select("id, subject, exam_date, teacher_id, teachers(name)")
+    .select("id, subject, exam_date, teacher_id, teachers ( id, first_name, last_name, full_name_generated )")
     .gte("exam_date", start)
     .order("exam_date", { ascending: true })
     .limit(limit);
@@ -44,10 +45,11 @@ export async function GET(request: Request) {
       id: string;
       subject: string;
       exam_date: string;
-      teachers: { name: string } | { name: string }[] | null;
+      teachers: unknown;
     };
-    const tn = e.teachers;
-    const teacherName = Array.isArray(tn) ? tn[0]?.name : tn && "name" in tn ? tn.name : "";
+    const teacherName = teacherEmbedDisplayName(
+      e.teachers as Parameters<typeof teacherEmbedDisplayName>[0],
+    );
     const c = counts[e.id] ?? { took: 0, open: 0, completed: 0, total: 0 };
     let statusLabel = "בתהליך";
     if (c.total > 0 && c.completed === c.total) statusLabel = "הושלמו בהשלמה";

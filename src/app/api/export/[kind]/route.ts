@@ -9,6 +9,7 @@ import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { pickLookupName } from "@/lib/lookups/display";
 import type { ExamTargetType } from "@/lib/types/db";
+import { teacherDisplayName, teacherEmbedDisplayName, teachingModeLabel } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +45,7 @@ const makeupStatusHe: Record<string, string> = {
 };
 
 function teacherNameCell(teachers: unknown): string {
-  const tn = teachers as { name?: string } | { name?: string }[] | null | undefined;
-  if (Array.isArray(tn)) return tn[0]?.name ?? "";
-  if (typeof tn === "object" && tn && "name" in tn) return String((tn as { name: string }).name);
-  return "";
+  return teacherEmbedDisplayName(teachers as Parameters<typeof teacherEmbedDisplayName>[0]);
 }
 
 function unwrapOne<T>(v: T | T[] | null | undefined): T | null {
@@ -130,17 +128,24 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
 
     if (kind === "teachers") {
       const data = await paginateSelect((from, to) =>
-        supabase
-          .from("teachers")
-          .select("id, name, created_at")
-          .eq("academic_year_id", scope.year.id)
-          .order("name")
+        notDeleted(supabase.from("teachers").select("first_name, last_name, full_name_generated, tz, email, created_at"))
+          .order("last_name")
+          .order("first_name")
           .range(from, to),
       );
       const rows = data.map((t) => {
-        const r = t as { name: string; created_at: string };
+        const r = t as {
+          first_name: string;
+          last_name: string;
+          full_name_generated?: string;
+          tz?: string | null;
+          email?: string | null;
+          created_at: string;
+        };
         return {
-          שם: r.name,
+          שם: teacherDisplayName(r),
+          תז: r.tz ?? "",
+          מייל: r.email ?? "",
           נוצר: r.created_at?.slice(0, 10) ?? "",
         };
       });
@@ -151,7 +156,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const data = await paginateSelect((from, to) =>
         supabase
           .from("exams")
-          .select("id, subject, exam_date, target_type, target_id, year_group, grade_level, teachers(name)")
+          .select("id, subject, exam_date, target_type, target_id, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
           .eq("academic_year_id", scope.year.id)
           .order("exam_date", { ascending: false })
           .range(from, to),
@@ -192,6 +197,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const raw = data as {
         id: string;
         subject: string;
+        lesson_name?: string | null;
+        teaching_mode?: string | null;
         target_type: ExamTargetType;
         target_id: string;
         year_group: number;
@@ -205,9 +212,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const rows = raw.map((a) => ({
         מורה: teacherNameCell(a.teachers),
         מקצוע: a.subject,
+        שם_שיעור: a.lesson_name ?? "",
         שנתון_ושכבה: formatYearGradeLabel(a.year_group, a.grade_level as "א" | "ב" | "ג"),
         סוג_שיבוץ: targetTypeHe[a.target_type] ?? a.target_type,
         ערך_שיבוץ: labels[a.id] ?? a.target_id,
+        סוג_הוראה: teachingModeLabel(a.teaching_mode),
       }));
       return NextResponse.json({ rows });
     }
@@ -232,7 +241,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         }
       }
       if (examIds.length) {
-        const { data: exams } = await supabase.from("exams").select("id, subject, exam_date, teachers(name)").in("id", examIds);
+        const { data: exams } = await supabase
+          .from("exams")
+          .select("id, subject, exam_date, teachers ( id, first_name, last_name, full_name_generated )")
+          .in("id", examIds);
         for (const e of exams ?? []) {
           const row = e as { id: string; subject: string; exam_date: string; teachers: unknown };
           examsBy[row.id] = { subject: row.subject, exam_date: row.exam_date, teachers: row.teachers };
@@ -276,7 +288,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const examIds = [...new Set(data.map((r) => (r as { exam_id: string }).exam_id))];
       const examsBy: Record<string, { subject: string; exam_date: string; teachers: unknown }> = {};
       if (examIds.length) {
-        const { data: exams } = await supabase.from("exams").select("id, subject, exam_date, teachers(name)").in("id", examIds);
+        const { data: exams } = await supabase
+          .from("exams")
+          .select("id, subject, exam_date, teachers ( id, first_name, last_name, full_name_generated )")
+          .in("id", examIds);
         for (const e of exams ?? []) {
           const row = e as { id: string; subject: string; exam_date: string; teachers: unknown };
           examsBy[row.id] = { subject: row.subject, exam_date: row.exam_date, teachers: row.teachers };

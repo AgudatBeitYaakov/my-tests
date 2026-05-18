@@ -118,16 +118,12 @@ export function applyColumnMap(
 export function assertRequiredHeaders(rawKeys: string[]): string | null {
   const nk = new Set(rawKeys.map((k) => normalizeHeaderKey(k)).filter(Boolean));
   const missing: string[] = [];
-  for (const header of STUDENT_EXCEL_HEADERS) {
-    const field = Object.entries(FIELD_ALIASES).find(([, aliases]) =>
-      aliases.some((a) => normalizeHeaderKey(a) === normalizeHeaderKey(header)),
-    )?.[0] as keyof typeof FIELD_ALIASES | undefined;
-    if (!field) continue;
+  for (const field of REQUIRED_FIELDS) {
     const ok = FIELD_ALIASES[field].some((a) => nk.has(normalizeHeaderKey(a)));
-    if (!ok) missing.push(header);
+    if (!ok) missing.push(FIELD_ALIASES[field][0]);
   }
   if (!missing.length) return null;
-  return `חסרות עמודות בקובץ: ${missing.join(", ")}. הורידי את התבנית הרשמית מ«תבנית» במסך ייבוא.`;
+  return `חסרות עמודות חובה בקובץ: ${missing.join(", ")}. הורידי את התבנית מ«תבנית» או מפי עמודות ידנית.`;
 }
 
 export function filterDataRows(raw: Record<string, unknown>[]): Record<string, unknown>[] {
@@ -139,6 +135,10 @@ export function filterDataRows(raw: Record<string, unknown>[]): Record<string, u
 
 function normCell(v: unknown): string {
   if (v === null || v === undefined) return "";
+  if (typeof v === "number" && Number.isFinite(v)) {
+    if (Number.isInteger(v) && Math.abs(v) < 1e10) return String(Math.trunc(v));
+    return String(v).trim();
+  }
   return String(v).trim();
 }
 

@@ -37,20 +37,29 @@ export type Student = {
 
 export type Teacher = {
   id: string;
-  name: string;
+  first_name: string;
+  last_name: string;
+  full_name_generated?: string;
+  tz?: string | null;
+  email?: string | null;
+  notes?: string | null;
   created_at: string;
 };
+
+export type TeachingMode = "full" | "short";
 
 export type TeacherAssignment = {
   id: string;
   academic_year_id: string;
   teacher_id: string;
   subject: string;
+  lesson_name?: string | null;
   year_group: number;
   grade_level: GradeLevel;
   target_type: ExamTargetType;
   target_id: string;
-  teachers?: { name: string } | null;
+  teaching_mode?: TeachingMode | null;
+  teachers?: Teacher | null;
 };
 
 export type Exam = {

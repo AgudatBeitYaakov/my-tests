@@ -10,7 +10,6 @@ import {
   validateImportRows,
   type ValidatedImportRow,
 } from "@/lib/students/excelImport";
-import { STUDENT_EXCEL_HEADERS } from "@/lib/students/excelTemplate";
 import {
   resolveAcademicYearScope,
   scopeFromSearchParams,
@@ -65,7 +64,16 @@ export async function POST(request: Request) {
       error: headerErr,
       headers,
       needMapping: true,
-      requiredHeaders: [...STUDENT_EXCEL_HEADERS],
+      requiredHeaders: [
+        "שם פרטי",
+        "שם משפחה",
+        "תעודת זהות",
+        "כיתה",
+        "התמחות",
+        "מסלול",
+        "שנתון",
+        "שכבה",
+      ],
     }, { status: 400 });
   }
 

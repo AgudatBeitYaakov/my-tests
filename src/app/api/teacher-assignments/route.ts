@@ -8,6 +8,7 @@ import {
   scopeFromSearchParams,
 } from "@/lib/academicYears/scope";
 import { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/db/assignmentSelect";
+import { resolveAssignmentTeachingMode } from "@/lib/teachers/assignments";
 import type { ExamTargetType, GradeLevel } from "@/lib/types/db";
 import { notDeleted } from "@/lib/db/softDelete";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -85,13 +86,16 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       teacher_id?: string;
       subject?: string;
+      lesson_name?: string;
       year_group?: number;
       grade_level?: string;
       target_type?: ExamTargetType;
       target_id?: string;
+      teaching_mode?: string;
     };
     const teacher_id = body.teacher_id?.trim();
     const subject = (body.subject ?? "").trim();
+    const lesson_name = (body.lesson_name ?? "").trim() || null;
     const year_group = Number(body.year_group);
     const grade_level = parseGradeLevel(String(body.grade_level ?? ""));
     const target_type = body.target_type;
@@ -107,16 +111,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "חובה לבחור יעד שיבוץ" }, { status: 400 });
     }
 
+    const teaching = await resolveAssignmentTeachingMode(
+      supabase,
+      target_type,
+      target_id,
+      body.teaching_mode,
+    );
+    if (teaching.error) {
+      return NextResponse.json({ error: teaching.error }, { status: 400 });
+    }
+
     const { data, error } = await supabase
       .from("teacher_assignments")
       .insert({
         academic_year_id: scope.year.id,
         teacher_id,
         subject,
+        lesson_name,
         year_group,
         grade_level,
         target_type,
         target_id,
+        teaching_mode: teaching.teaching_mode,
       })
       .select(ASSIGNMENT_WITH_LOOKUPS)
       .single();

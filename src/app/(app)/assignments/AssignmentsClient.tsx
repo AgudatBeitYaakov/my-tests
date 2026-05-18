@@ -15,8 +15,11 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
+import { TeacherSearchCombobox } from "@/components/teachers/TeacherSearchCombobox";
 import { pickLookupName } from "@/lib/lookups/display";
-import type { ExamTargetType, Teacher } from "@/lib/types/db";
+import { TEACHING_TRACK_NAME } from "@/lib/students/fields";
+import { teacherEmbedDisplayName, teachingModeLabel } from "@/lib/teachers/display";
+import type { ExamTargetType, Teacher, TeachingMode } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
   if (!r.ok) throw new Error("שגיאת טעינה");
@@ -29,6 +32,8 @@ type AssignmentRow = {
   id: string;
   teacher_id: string;
   subject: string;
+  lesson_name?: string | null;
+  teaching_mode?: TeachingMode | null;
   year_group: number;
   grade_level: string;
   year_label?: string;
@@ -36,7 +41,7 @@ type AssignmentRow = {
   target_id: string;
   target_label?: string;
   target_type_label?: string;
-  teachers: { name: string } | null;
+  teachers: Teacher | null;
 };
 
 type LookupItem = { id: string; name: string };
@@ -51,7 +56,6 @@ const targetStepOptions: { value: ExamTargetType; label: string }[] = [
 export function AssignmentsClient() {
   const { viewingYear, readOnly } = useAcademicYear();
   const assignmentsUrl = withYearQuery("/api/teacher-assignments", viewingYear?.id);
-  const { data: tData, error: tErr, isLoading: tLoad } = useSWR<{ teachers: Teacher[] }>("/api/teachers", fetcher);
   const { data: aData, error: aErr, isLoading: aLoad, mutate } = useSWR<{
     assignments: AssignmentRow[];
     layers?: LayerOption[];
@@ -62,10 +66,12 @@ export function AssignmentsClient() {
 
   const [teacherId, setTeacherId] = useState("");
   const [subject, setSubject] = useState("");
+  const [lessonName, setLessonName] = useState("");
   const [yearGroup, setYearGroup] = useState<number | "">("");
   const [gradeLevel, setGradeLevel] = useState("");
   const [targetKind, setTargetKind] = useState<ExamTargetType>("class");
   const [targetId, setTargetId] = useState("");
+  const [teachingMode, setTeachingMode] = useState<TeachingMode | "">("");
   const [saving, setSaving] = useState(false);
 
   const targetItems = useMemo(() => {
@@ -73,6 +79,10 @@ export function AssignmentsClient() {
     if (targetKind === "specialization") return spData?.items ?? [];
     return trData?.items ?? [];
   }, [targetKind, clData, spData, trData]);
+
+  const selectedTrackName =
+    targetKind === "track" ? (trData?.items.find((t) => t.id === targetId)?.name ?? "") : "";
+  const showTeachingMode = targetKind === "track" && selectedTrackName === TEACHING_TRACK_NAME;
 
   async function addAssignment(e: React.FormEvent) {
     e.preventDefault();
@@ -88,18 +98,22 @@ export function AssignmentsClient() {
         body: JSON.stringify({
           teacher_id: teacherId,
           subject,
+          lesson_name: lessonName.trim() || null,
           year_group: yearGroup,
           grade_level: gradeLevel,
           target_type: targetKind,
           target_id: targetId,
+          teaching_mode: showTeachingMode ? teachingMode || null : null,
         }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error((j as { error?: string }).error ?? "שגיאה");
       setSubject("");
+      setLessonName("");
       setYearGroup("");
       setGradeLevel("");
       setTargetId("");
+      setTeachingMode("");
       await mutate();
     } catch (err) {
       alert((err as Error).message);
@@ -156,30 +170,7 @@ export function AssignmentsClient() {
         onSubmit={addAssignment}
         className="grid gap-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm md:grid-cols-2 lg:grid-cols-3 dark:border-slate-700/70 dark:bg-zinc-900/50"
       >
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">מורה *</span>
-          <select
-            required
-            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
-            value={teacherId}
-            onChange={(e) => setTeacherId(e.target.value)}
-          >
-            <option value="">— בחרי —</option>
-            {tData?.teachers?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          {tLoad ? (
-            <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
-              <Spinner className="size-4" />
-              טוען מורות…
-            </div>
-          ) : tErr ? (
-            <p className="mt-1 text-xs text-red-700">{(tErr as Error).message}</p>
-          ) : null}
-        </label>
+        <TeacherSearchCombobox value={teacherId} onChange={(id) => setTeacherId(id)} required />
 
         <label className="block md:col-span-1">
           <span className="text-sm font-medium text-zinc-700">מקצוע *</span>
@@ -188,7 +179,17 @@ export function AssignmentsClient() {
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
-            placeholder="מתמטיקה…"
+            placeholder="גרפיקה, הנה״ח…"
+          />
+        </label>
+
+        <label className="block md:col-span-1">
+          <span className="text-sm font-medium text-zinc-700">שם שיעור</span>
+          <input
+            value={lessonName}
+            onChange={(e) => setLessonName(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
+            placeholder="פוטושופ 1, הנה״ח מתקדם…"
           />
         </label>
 
@@ -213,6 +214,21 @@ export function AssignmentsClient() {
           </select>
         </label>
 
+        {showTeachingMode ? (
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-700">סוג הוראה</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+              value={teachingMode}
+              onChange={(e) => setTeachingMode(e.target.value as TeachingMode | "")}
+            >
+              <option value="">— ללא סינון —</option>
+              <option value="full">מלא</option>
+              <option value="short">מקוצר</option>
+            </select>
+          </label>
+        ) : null}
+
         <fieldset className="md:col-span-2 lg:col-span-3">
           <legend className="text-sm font-medium text-zinc-700">שלב 1 — סוג שיבוץ (אחד בלבד)</legend>
           <div className="mt-2 flex flex-wrap gap-3">
@@ -226,6 +242,7 @@ export function AssignmentsClient() {
                   onChange={() => {
                     setTargetKind(o.value);
                     setTargetId("");
+                    setTeachingMode("");
                   }}
                 />
                 {o.label}
@@ -244,7 +261,10 @@ export function AssignmentsClient() {
             <select
               required
               value={targetId}
-              onChange={(e) => setTargetId(e.target.value)}
+              onChange={(e) => {
+                setTargetId(e.target.value);
+                setTeachingMode("");
+              }}
               className="mt-1 w-full max-w-md rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
             >
               <option value="">— בחרי —</option>
@@ -288,6 +308,7 @@ export function AssignmentsClient() {
             <TableRow>
               <TableHead>מורה</TableHead>
               <TableHead>מקצוע</TableHead>
+              <TableHead>שם שיעור</TableHead>
               <TableHead>סוג שיבוץ</TableHead>
               <TableHead>ערך שיבוץ</TableHead>
               <TableHead>שנתון</TableHead>
@@ -298,11 +319,17 @@ export function AssignmentsClient() {
             {rows.length ? (
               rows.map((a) => (
                 <TableRow key={a.id}>
-                  <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{a.teachers?.name ?? "—"}</TableCell>
+                  <TableCell className="font-medium text-slate-900 dark:text-zinc-100">
+                    {teacherEmbedDisplayName(a.teachers)}
+                  </TableCell>
                   <TableCell>{a.subject}</TableCell>
+                  <TableCell>{a.lesson_name ?? "—"}</TableCell>
                   <TableCell className="text-slate-600 dark:text-zinc-300">{a.target_type_label ?? a.target_type}</TableCell>
                   <TableCell className="text-slate-800 dark:text-zinc-200">{a.target_label ?? a.target_id}</TableCell>
-                  <TableCell>{a.year_label ?? `שנתון ${a.year_group} — שכבה ${a.grade_level}`}</TableCell>
+                  <TableCell>
+                    {a.year_label ?? `שנתון ${a.year_group} — שכבה ${a.grade_level}`}
+                    {a.teaching_mode ? ` · ${teachingModeLabel(a.teaching_mode)}` : ""}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <button type="button" className={LIST_ROW_DELETE_CLASS} onClick={() => void removeRow(a.id)}>
                       <Trash2 className="size-3.5 shrink-0 opacity-70" strokeWidth={2} />
@@ -313,7 +340,7 @@ export function AssignmentsClient() {
               ))
             ) : (
               <TableRow>
-                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={6}>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
                   {aLoad ? "טוען…" : "אין שיבוצים"}
                 </TableCell>
               </TableRow>

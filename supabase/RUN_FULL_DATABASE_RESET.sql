@@ -37,7 +37,8 @@ drop function if exists public.assignments_validate_target() cascade;
 drop function if exists public.students_validate_teaching_fields() cascade;
 drop function if exists public.students_validate_year_grade() cascade;
 drop function if exists public.academic_years_single_active() cascade;
-drop function if exists public.teachers_default_academic_year() cascade;
+drop function if exists public.teachers_validate_fields() cascade;
+drop function if exists public.assignments_validate_teaching_mode() cascade;
 drop function if exists public.exam_tracking_fill_academic_year() cascade;
 drop function if exists public.student_history_fill_academic_year() cascade;
 drop function if exists public.makeup_exams_fill_academic_year() cascade;
@@ -100,14 +101,24 @@ create table public.users (
 
 create table public.teachers (
   id uuid primary key default gen_random_uuid(),
-  academic_year_id uuid not null references public.academic_years (id) on delete restrict,
-  name text not null,
+  first_name text not null,
+  last_name text not null,
+  full_name_generated text generated always as (trim(first_name || ' ' || last_name)) stored,
+  tz text,
+  email text,
   notes text,
   created_at timestamptz not null default now(),
   deleted_at timestamptz
 );
 
-create index idx_teachers_academic_year on public.teachers (academic_year_id);
+alter table public.teachers add constraint teachers_tz_format_check
+  check (tz is null or tz ~ '^\d{1,9}$');
+
+alter table public.teachers add constraint teachers_email_format_check
+  check (email is null or email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$');
+
+create index idx_teachers_name on public.teachers (first_name, last_name);
+create index idx_teachers_email on public.teachers (email) where email is not null;
 
 create table public.students (
   id uuid primary key default gen_random_uuid(),
@@ -152,15 +163,30 @@ create table public.teacher_assignments (
   year_group integer not null,
   grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
   subject text not null,
+  lesson_name text,
   target_type public.exam_target_type not null,
   target_id uuid not null,
+  teaching_mode text,
   created_at timestamptz not null default now(),
   deleted_at timestamptz
 );
 
+alter table public.teacher_assignments add constraint teacher_assignments_teaching_mode_check
+  check (teaching_mode is null or teaching_mode in ('full', 'short'));
+
 create unique index uq_teacher_assignment on public.teacher_assignments (
-  academic_year_id, teacher_id, year_group, grade_level, subject, target_type, target_id
+  academic_year_id,
+  teacher_id,
+  year_group,
+  grade_level,
+  subject,
+  coalesce(lesson_name, ''),
+  target_type,
+  target_id,
+  coalesce(teaching_mode, '')
 ) where deleted_at is null;
+
+create index idx_teacher_assignments_teacher on public.teacher_assignments (teacher_id);
 
 create table public.exams (
   id uuid primary key default gen_random_uuid(),
@@ -436,24 +462,30 @@ create trigger trg_exam_students_updated
   before update on public.exam_students
   for each row execute function public.set_updated_at();
 
--- ממלא academic_year_id כשהאפליקציה לא שולחת (מורים, מעקב, היסטוריה, השלמות)
-create or replace function public.teachers_default_academic_year()
+create or replace function public.assignments_validate_teaching_mode()
 returns trigger language plpgsql as $$
+declare
+  track_name text;
 begin
-  if new.academic_year_id is null then
-    select id into new.academic_year_id from public.academic_years where is_active limit 1;
-    if new.academic_year_id is null then
-      raise exception 'לא הוגדרה שנה פעילה — צרי שנה בהגדרות לפני הוספת מורה';
-    end if;
+  if new.teaching_mode is null then
+    return new;
+  end if;
+  if new.target_type <> 'track' then
+    raise exception 'סוג הוראה מותר רק בשיבוץ מסלול';
+  end if;
+  select t.name into track_name from public.tracks t where t.id = new.target_id;
+  if coalesce(track_name, '') <> 'הוראה' then
+    raise exception 'סוג הוראה מותר רק במסלול הוראה';
   end if;
   return new;
 end;
 $$;
 
-create trigger trg_teachers_default_year
-  before insert on public.teachers
-  for each row execute function public.teachers_default_academic_year();
+create trigger trg_assignments_validate_teaching_mode
+  before insert or update on public.teacher_assignments
+  for each row execute function public.assignments_validate_teaching_mode();
 
+-- ממלא academic_year_id כשהאפליקציה לא שולחת (מעקב, היסטוריה, השלמות)
 create or replace function public.exam_tracking_fill_academic_year()
 returns trigger language plpgsql as $$
 begin
@@ -515,7 +547,6 @@ create index idx_students_tz on public.students (tz);
 create index idx_students_full_name on public.students (full_name_generated);
 create index idx_students_deleted on public.students (deleted_at) where deleted_at is null;
 create index idx_students_import_batch on public.students (import_batch_id);
-create index idx_teachers_name on public.teachers (name);
 create index idx_teacher_assignments_year on public.teacher_assignments (academic_year_id, year_group, grade_level);
 create index idx_teacher_assignments_target_id on public.teacher_assignments (target_id);
 create index idx_exams_academic_year on public.exams (academic_year_id);
@@ -535,7 +566,7 @@ create index idx_notifications_user_unread on public.notifications (user_id, cre
 
 create extension if not exists pg_trgm;
 create index idx_students_full_name_trgm on public.students using gin (full_name_generated gin_trgm_ops);
-create index idx_teachers_name_trgm on public.teachers using gin (name gin_trgm_ops);
+create index idx_teachers_full_name_trgm on public.teachers using gin (full_name_generated gin_trgm_ops);
 
 alter table public.notifications enable row level security;
 alter table public.academic_years enable row level security;

@@ -5,6 +5,7 @@ import { notDeleted } from "@/lib/db/softDelete";
 import type { GradeLevel } from "@/lib/academicYears/types";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import type { ExamTargetType } from "@/lib/types/db";
+import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
   const examsQuery = notDeleted(
     supabase
       .from("exams")
-      .select("id, subject, exam_date, target_type, target_id, teacher_id, year_group, grade_level, teachers(name)"),
+      .select("id, subject, exam_date, target_type, target_id, teacher_id, year_group, grade_level, teachers ( id, first_name, last_name, full_name_generated )"),
   )
     .eq("academic_year_id", scope.year.id)
     .gte("exam_date", start)
@@ -175,8 +176,7 @@ export async function GET(request: Request) {
     const c = countsByExam[e.id] ?? emptyCounts();
     const tr = trackingByExam[e.id] ?? null;
     const cols = colorsForExam(e.exam_date, c, tr);
-    const tn = e.teachers;
-    const teacherName = Array.isArray(tn) ? tn[0]?.name : tn && typeof tn === "object" && "name" in tn ? tn.name : "";
+    const teacherName = teacherEmbedDisplayName(e.teachers);
     const gradeLevelName = formatYearGradeLabel(e.year_group, e.grade_level);
     const classConflict =
       e.target_type === "class" && (classDayCount.get(classDayKey(e.exam_date, e.target_id)) ?? 0) > 1;

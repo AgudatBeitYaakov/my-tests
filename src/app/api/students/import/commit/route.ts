@@ -79,6 +79,7 @@ export async function POST(request: Request) {
   for (const r of good as ValidatedImportRow[]) {
     if (!r.resolved) continue;
     const patch = {
+      academic_year_id: scope.year.id,
       first_name: r.first_name,
       last_name: r.last_name,
       tz: r.tz,
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
       teaching_track_type: r.resolved.teaching_track_type,
       year_group: r.resolved.year_group,
       grade_level: r.resolved.grade_level,
-      status: "active",
+      status: "active" as const,
     };
     const id = tzToId.get(r.tz.trim());
     if (id) {

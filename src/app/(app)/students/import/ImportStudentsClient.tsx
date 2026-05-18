@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FileDown, List } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
@@ -39,6 +40,7 @@ const MAP_FIELDS: { key: keyof ColumnMap; label: string }[] = [
 ];
 
 export function ImportStudentsClient() {
+  const router = useRouter();
   const { viewingYear, readOnly } = useAcademicYear();
 
   const [busy, setBusy] = useState(false);
@@ -137,14 +139,21 @@ export function ImportStudentsClient() {
         setImportErrors((j as { errors?: { rowNumber: number; errors: string[] }[] }).errors ?? []);
         throw new Error((j as { error?: string }).error ?? "שגיאה");
       }
+      const imported = (j as { imported?: number }).imported ?? 0;
+      const updated = (j as { updated?: number }).updated ?? 0;
+      const failed = (j as { failed?: number }).failed ?? 0;
       setMessage(
-        `ייבוא הושלם: יובאו ${(j as { imported?: number }).imported ?? 0}, עודכנו ${(j as { updated?: number }).updated ?? 0}, נכשלו ${(j as { failed?: number }).failed ?? 0}`,
+        `ייבוא הושלם: יובאו ${imported}, עודכנו ${updated}, נכשלו ${failed}.` +
+          (imported === 0 && updated === 0 && failed === 0
+            ? " אם היו ת״ז קיימות — סמני «עדכן קיימות» לפני האישור."
+            : ""),
       );
       setRows(null);
       setSummary(null);
       setValidCount(0);
       setErrorCount(0);
       setConfirmOpen(false);
+      if (imported > 0 || updated > 0) router.refresh();
     } catch (e) {
       setMessage((e as Error).message);
     } finally {

@@ -19,7 +19,7 @@ export async function GET() {
   if (examIds.length) {
     const { data: exams } = await supabase
       .from("exams")
-      .select("id, subject, exam_date, teachers(name)")
+      .select("id, subject, exam_date, teachers ( id, first_name, last_name, full_name_generated )")
       .in("id", examIds);
     for (const e of exams ?? []) {
       const raw = e as { id: string; subject: string; exam_date: string; teachers: unknown };
