@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import {
   assignmentImportKey,
-  buildTeacherLookupMaps,
   validateAssignmentImportRows,
   type ParsedAssignmentRow,
   type ValidatedAssignmentRow,
 } from "@/lib/assignments/excelImport";
 import {
+  formatAssignmentImportInsertError,
+  loadAssignmentImportContext,
+} from "@/lib/assignments/importContext";
+import {
   readOnlyResponse,
   resolveAcademicYearScope,
   scopeFromSearchParams,
 } from "@/lib/academicYears/scope";
-import { notDeleted } from "@/lib/db/softDelete";
-import { TEACHER_COLUMNS } from "@/lib/teachers/db";
+import { dbSchemaHint } from "@/lib/db/schemaHint";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { GradeLevel } from "@/lib/types/db";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,9 @@ export async function POST(request: Request) {
   const rowsIn = body.rows ?? [];
   const skipDuplicates = body.skipDuplicates !== false;
 
-  if (!rowsIn.length) return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
+  if (!rowsIn.length) {
+    return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
+  }
 
   const supabase = createSupabaseAdminClient();
   const scope = await resolveAcademicYearScope(
@@ -39,50 +42,13 @@ export async function POST(request: Request) {
     return NextResponse.json(readOnlyResponse(), { status: 403 });
   }
 
-  const [cl, sp, tr, teachersRes, existingRes] = await Promise.all([
-    supabase.from("classes").select("id,name").eq("is_active", true),
-    supabase.from("specializations").select("id,name").eq("is_active", true),
-    supabase.from("tracks").select("id,name").eq("is_active", true),
-    notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS)),
-    notDeleted(supabase.from("teacher_assignments").select(
-      "teacher_id,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
-    )).eq("academic_year_id", scope.year.id),
-  ]);
-
-  for (const res of [cl, sp, tr, teachersRes, existingRes]) {
-    if (res.error) return NextResponse.json({ error: res.error.message }, { status: 500 });
+  const loaded = await loadAssignmentImportContext(supabase, scope.year.id);
+  if ("error" in loaded) {
+    return NextResponse.json({ error: dbSchemaHint(loaded.error) }, { status: 500 });
   }
+  const { ctx } = loaded;
 
-  const classByName = new Map((cl.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const specByName = new Map((sp.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const trackByName = new Map((tr.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const trackNameById = new Map((tr.data ?? []).map((r) => [r.id, r.name.trim()] as const));
-  const teacherMaps = buildTeacherLookupMaps(teachersRes.data ?? []);
-
-  const existingKeys = new Set(
-    (existingRes.data ?? []).map((a) =>
-      assignmentImportKey(scope.year.id, {
-        teacher_id: a.teacher_id,
-        subject: a.subject.trim(),
-        lesson_name: (a.lesson_name as string | null) ?? null,
-        grade_level: a.grade_level as GradeLevel,
-        class_id: a.class_id,
-        specialization_id: a.specialization_id,
-        track_id: a.track_id,
-        psychology_enabled: a.psychology_enabled,
-        teaching_mode: (a.teaching_mode as "full" | "short" | null) ?? null,
-        assignment_category: a.assignment_category as "חובה" | "התמחות",
-      }),
-    ),
-  );
-
-  const validated = validateAssignmentImportRows(rowsIn, {
-    teacherMaps,
-    classByName,
-    specByName,
-    trackByName,
-    trackNameById,
-  });
+  const validated = validateAssignmentImportRows(rowsIn, ctx);
 
   const failed: { rowNumber: number; errors: string[] }[] = [];
   const good = validated.filter((r) => {
@@ -99,8 +65,8 @@ export async function POST(request: Request) {
 
   for (const r of good as ValidatedAssignmentRow[]) {
     if (!r.resolved) continue;
-    const key = assignmentImportKey(scope.year.id, r.resolved);
-    if (existingKeys.has(key)) {
+    const key = assignmentImportKey(ctx.academicYearId, r.resolved);
+    if (ctx.existingKeys.has(key)) {
       if (skipDuplicates) {
         skippedDuplicates += 1;
         continue;
@@ -108,9 +74,9 @@ export async function POST(request: Request) {
       rowErrors.push({ rowNumber: r.rowNumber, errors: ["שיבוץ זהה כבר קיים"] });
       continue;
     }
-    existingKeys.add(key);
+    ctx.existingKeys.add(key);
     toInsert.push({
-      academic_year_id: scope.year.id,
+      academic_year_id: ctx.academicYearId,
       teacher_id: r.resolved.teacher_id,
       subject: r.resolved.subject,
       lesson_name: r.resolved.lesson_name,
@@ -124,6 +90,25 @@ export async function POST(request: Request) {
     });
   }
 
+  if (!toInsert.length) {
+    const msg =
+      rowErrors.length > 0
+        ? "לא נוסף אף שיבוץ — יש שגיאות בשורות (ראי פירוט למטה)"
+        : skippedDuplicates > 0
+          ? "כל השורות כבר קיימות במערכת — לא נוסף שיבוץ חדש"
+          : "אין שורות תקינות לייבוא";
+    return NextResponse.json(
+      {
+        error: msg,
+        imported: 0,
+        failed: rowErrors.length,
+        skippedDuplicates,
+        errors: rowErrors,
+      },
+      { status: 400 },
+    );
+  }
+
   const chunk = 80;
   let inserted = 0;
 
@@ -135,9 +120,10 @@ export async function POST(request: Request) {
       inserted += slice.length;
     }
   } catch (e) {
+    const raw = (e as Error).message;
     return NextResponse.json(
       {
-        error: (e as Error).message,
+        error: dbSchemaHint(formatAssignmentImportInsertError(raw)),
         imported: inserted,
         failed: rowErrors.length,
         skippedDuplicates,

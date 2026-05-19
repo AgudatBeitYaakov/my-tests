@@ -10,7 +10,9 @@ export function formatGradeLabel(gradeLevel: GradeLevel | null | undefined): str
 }
 
 export function parseGradeLevel(raw: string): GradeLevel | null {
-  const t = raw.trim();
+  let t = raw.trim().replace(/\s+/g, " ");
+  const hebrewFromLabel = t.match(/^שכבה\s*([אבג])$/);
+  if (hebrewFromLabel) t = hebrewFromLabel[1];
   if (t === "א" || t === "ב" || t === "ג") return t;
   if (t === "A" || t === "a") return "א";
   if (t === "B" || t === "b") return "ב";

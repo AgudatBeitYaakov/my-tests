@@ -5,19 +5,18 @@ import {
   assertAssignmentRequiredHeaders,
   ASSIGNMENT_FIELD_ALIASES,
   assignmentImportKey,
-  buildTeacherLookupMaps,
   sheetRowsToAssignmentObjects,
   validateAssignmentImportRows,
   type AssignmentColumnMap,
   type ValidatedAssignmentRow,
 } from "@/lib/assignments/excelImport";
-import { TEACHER_COLUMNS } from "@/lib/teachers/db";
+import { loadAssignmentImportContext } from "@/lib/assignments/importContext";
 import { filterDataRows } from "@/lib/students/excelImport";
 import {
   resolveAcademicYearScope,
   scopeFromSearchParams,
 } from "@/lib/academicYears/scope";
-import { notDeleted } from "@/lib/db/softDelete";
+import { dbSchemaHint } from "@/lib/db/schemaHint";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -93,57 +92,20 @@ export async function POST(request: Request) {
     scopeFromSearchParams(new URL(request.url).searchParams),
   );
 
-  const [cl, sp, tr, teachersRes, existingRes] = await Promise.all([
-    supabase.from("classes").select("id,name").eq("is_active", true),
-    supabase.from("specializations").select("id,name").eq("is_active", true),
-    supabase.from("tracks").select("id,name").eq("is_active", true),
-    notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS)),
-    notDeleted(supabase.from("teacher_assignments").select(
-      "teacher_id,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
-    )).eq("academic_year_id", scope.year.id),
-  ]);
-
-  for (const res of [cl, sp, tr, teachersRes, existingRes]) {
-    if (res.error) return NextResponse.json({ error: res.error.message }, { status: 500 });
+  const loaded = await loadAssignmentImportContext(supabase, scope.year.id);
+  if ("error" in loaded) {
+    return NextResponse.json({ error: dbSchemaHint(loaded.error) }, { status: 500 });
   }
-
-  const classByName = new Map((cl.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const specByName = new Map((sp.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const trackByName = new Map((tr.data ?? []).map((r) => [r.name.trim(), r.id] as const));
-  const trackNameById = new Map((tr.data ?? []).map((r) => [r.id, r.name.trim()] as const));
-  const teacherMaps = buildTeacherLookupMaps(teachersRes.data ?? []);
-
-  const existingKeys = new Set(
-    (existingRes.data ?? []).map((a) =>
-      assignmentImportKey(scope.year.id, {
-        teacher_id: a.teacher_id,
-        subject: a.subject.trim(),
-        lesson_name: (a.lesson_name as string | null) ?? null,
-        grade_level: a.grade_level as "א" | "ב" | "ג",
-        class_id: a.class_id,
-        specialization_id: a.specialization_id,
-        track_id: a.track_id,
-        psychology_enabled: a.psychology_enabled,
-        teaching_mode: (a.teaching_mode as "full" | "short" | null) ?? null,
-        assignment_category: a.assignment_category as "חובה" | "התמחות",
-      }),
-    ),
-  );
+  const { ctx } = loaded;
 
   const parsed = sheetRowsToAssignmentObjects(raw);
-  const validated = validateAssignmentImportRows(parsed, {
-    teacherMaps,
-    classByName,
-    specByName,
-    trackByName,
-    trackNameById,
-  });
+  const validated = validateAssignmentImportRows(parsed, ctx);
 
   const rows: (ValidatedAssignmentRow & { warnings?: string[] })[] = validated.map((row) => {
     const warnings: string[] = [];
     if (row.resolved) {
-      const key = assignmentImportKey(scope.year.id, row.resolved);
-      if (existingKeys.has(key)) {
+      const key = assignmentImportKey(ctx.academicYearId, row.resolved);
+      if (ctx.existingKeys.has(key)) {
         warnings.push("שיבוץ זהה כבר קיים — השורה תידלג בייבוא");
       }
     }
@@ -153,13 +115,16 @@ export async function POST(request: Request) {
   const validCount = rows.filter((r) => r.errors.length === 0).length;
   const errorCount = rows.filter((r) => r.errors.length > 0).length;
   const duplicateCount = rows.filter(
-    (r) => r.errors.length === 0 && r.resolved && existingKeys.has(assignmentImportKey(scope.year.id, r.resolved)),
+    (r) =>
+      r.errors.length === 0 &&
+      r.resolved &&
+      ctx.existingKeys.has(assignmentImportKey(ctx.academicYearId, r.resolved)),
   ).length;
   const newCount = rows.filter(
     (r) =>
       r.errors.length === 0 &&
       r.resolved &&
-      !existingKeys.has(assignmentImportKey(scope.year.id, r.resolved)),
+      !ctx.existingKeys.has(assignmentImportKey(ctx.academicYearId, r.resolved)),
   ).length;
 
   return NextResponse.json({

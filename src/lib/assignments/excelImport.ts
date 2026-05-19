@@ -302,7 +302,11 @@ export function validateAssignmentImportRows(
     if (!category) errors.push('סוג שיבוץ חסר או לא תקין (חובה / התמחות)');
 
     const teacher = resolveTeacherId(maps.teacherMaps, r.teacher_first_name, r.teacher_last_name);
-    if (teacher.err) errors.push(teacher.err);
+    if (teacher.err) {
+    errors.push(
+      `${teacher.err} (ודאי שהמורה קיימת בשנה הנבחרת ושהשם תואם בדיוק לרשימת המורות)`,
+    );
+  }
 
     const grade_level = parseGradeLevel(r.grade_level);
     if (!grade_level) errors.push("שכבה לא תקינה (א/ב/ג)");
