@@ -14,7 +14,7 @@ export default async function LoginPage({
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* פאנל סמל הסמינר — בצד (ימין ב-RTL) */}
+      {/* פאנל רקע — סמל עדין בלבד (ימין ב-RTL) */}
       <aside
         aria-hidden
         className="relative hidden overflow-hidden border-s border-slate-200/80 bg-gradient-to-bl from-sky-100/90 via-white to-slate-50 lg:block"
@@ -28,21 +28,6 @@ export default async function LoginPage({
             className="h-auto max-h-[min(88vh,42rem)] w-full max-w-[min(92%,28rem)] object-contain opacity-[0.11] contrast-[1.15] brightness-110"
             priority
           />
-        </div>
-        <div className="relative z-10 flex h-full flex-col items-center justify-center gap-6 p-10">
-          <div className="rounded-3xl border border-slate-200/90 bg-white/85 p-5 shadow-lg shadow-sky-900/5 ring-1 ring-white/80 backdrop-blur-sm">
-            <Image
-              src="/logo.png"
-              alt="סמינר בית יעקב למורות בית שמש"
-              width={220}
-              height={220}
-              className="mx-auto h-auto w-[min(100%,13.5rem)] object-contain"
-              priority
-            />
-          </div>
-          <p className="max-w-xs text-center text-sm font-medium leading-relaxed text-slate-600">
-            סמינר &apos;בית יעקב&apos; למורות בית שמש
-          </p>
         </div>
       </aside>
 
@@ -59,11 +44,6 @@ export default async function LoginPage({
         </div>
 
         <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white/95 p-7 shadow-lg backdrop-blur-sm sm:p-8">
-          <div className="mb-5 flex justify-center lg:hidden">
-            <span className="relative size-20 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-2 ring-white/80">
-              <Image src="/logo.png" alt="לוגו הסמינר" fill className="object-contain p-2" sizes="80px" priority />
-            </span>
-          </div>
           <LoginTimeGreeting />
           <h1 className="mt-4 text-2xl font-bold text-[var(--color-primary)]">כניסה למערכת</h1>
           <LoginForm initialError={err} />

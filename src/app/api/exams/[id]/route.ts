@@ -35,21 +35,35 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
 
   const studentIds = [...new Set((lines ?? []).map((l) => l.student_id))];
-  let byStudent: Record<string, { first_name: string; last_name: string; tz: string }> = {};
+  type StudentLine = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    tz: string;
+    is_psychology?: boolean;
+    teaching_track_type?: "full" | "short" | null;
+    classes?: { name: string } | { name: string }[] | null;
+    tracks?: { name: string } | { name: string }[] | null;
+    specializations?: { name: string } | { name: string }[] | null;
+    secondary_specializations?: { name: string } | { name: string }[] | null;
+  };
+  let byStudent: Record<string, StudentLine> = {};
 
   if (studentIds.length) {
     const { data: studs } = await supabase
       .from("students")
-      .select("id, first_name, last_name, tz")
+      .select(
+        `id, first_name, last_name, tz, is_psychology, teaching_track_type,
+        classes ( name ),
+        tracks ( name ),
+        specializations:specializations!students_specialization_id_fkey ( name ),
+        secondary_specializations:specializations!students_secondary_specialization_id_fkey ( name )`,
+      )
       .in("id", studentIds);
 
     for (const s of studs ?? []) {
-      const r = s as { id: string; first_name: string; last_name: string; tz: string };
-      byStudent[r.id] = {
-        first_name: r.first_name,
-        last_name: r.last_name,
-        tz: r.tz,
-      };
+      const r = s as StudentLine;
+      byStudent[r.id] = r;
     }
   }
 

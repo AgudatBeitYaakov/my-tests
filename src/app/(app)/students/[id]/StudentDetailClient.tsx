@@ -7,8 +7,7 @@ import { ExamStudentStatusBadge, MakeupStatusBadge } from "@/components/ui/Statu
 import { NotesButton } from "@/components/ui/NotesButton";
 import { PrintButton } from "@/components/PrintButton";
 import { Spinner } from "@/components/ui/Spinner";
-import { formatCohortGradeLabel } from "@/lib/academic/studentGrade";
-import { pickLookupName } from "@/lib/lookups/display";
+import { StudentProfileGrid } from "@/components/students/StudentProfileGrid";
 import type { ExamStudentStatus, MakeupExamStatus, Student } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
@@ -83,11 +82,6 @@ export function StudentDetailClient({ id }: { id: string }) {
           </h1>
           <p className="mt-1 text-sm text-zinc-600">
             ת״ז <span dir="ltr" className="font-mono">{s.tz}</span>
-            {" · "}
-            שכבה {(s as Student & { year_label?: string }).year_label ?? formatCohortGradeLabel(s.grade_level)}
-            · כיתה {pickLookupName(s.classes)}
-            {pickLookupName(s.tracks) !== "—" ? ` · מסלול ${pickLookupName(s.tracks)}` : ""}
-            {pickLookupName(s.specializations) !== "—" ? ` · התמחות ${pickLookupName(s.specializations)}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
@@ -111,6 +105,14 @@ export function StudentDetailClient({ id }: { id: string }) {
           </Link>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm print:break-inside-avoid">
+        <h2 className="text-lg font-semibold">פרטי תלמידה</h2>
+        <StudentProfileGrid
+          student={{ ...s, year_label: (s as Student & { year_label?: string }).year_label }}
+          className="mt-4"
+        />
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">

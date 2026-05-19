@@ -9,6 +9,9 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { NotesButton } from "@/components/ui/NotesButton";
 import { PrintButton } from "@/components/PrintButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { pickLookupName } from "@/lib/lookups/display";
+import { psychologyLabel } from "@/lib/students/display";
+import { teachingTrackTypeLabel } from "@/lib/students/fields";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import type { ExamStudentStatus, Teacher } from "@/lib/types/db";
 
@@ -21,7 +24,17 @@ type Line = {
   id: string;
   status: ExamStudentStatus;
   student_id: string;
-  students: { first_name: string; last_name: string; tz: string } | null;
+  students: {
+    first_name: string;
+    last_name: string;
+    tz: string;
+    is_psychology?: boolean;
+    teaching_track_type?: "full" | "short" | null;
+    classes?: { name: string } | { name: string }[] | null;
+    tracks?: { name: string } | { name: string }[] | null;
+    specializations?: { name: string } | { name: string }[] | null;
+    secondary_specializations?: { name: string } | { name: string }[] | null;
+  } | null;
 };
 
 type Exam = {
@@ -162,25 +175,48 @@ export function ExamEditClient({ id }: { id: string }) {
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
-        <Table>
+        <Table className="min-w-[960px]">
           <TableHeader>
             <TableRow>
               <TableHead>תלמידה</TableHead>
               <TableHead>ת״ז</TableHead>
+              <TableHead>כיתה</TableHead>
+              <TableHead>מסלול</TableHead>
+              <TableHead>התמחות</TableHead>
+              <TableHead>התמחות נוספת</TableHead>
+              <TableHead>פסיכולוגיה</TableHead>
+              <TableHead>סוג הוראה</TableHead>
               <TableHead>סטטוס</TableHead>
               <TableHead>פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {lines.length ? (
-              lines.map((row) => (
+              lines.map((row) => {
+                const st = row.students;
+                return (
                 <TableRow key={row.id}>
                   <TableCell className="font-medium">
-                    {row.students ? `${row.students.last_name} ${row.students.first_name}` : "—"}
+                    {st ? (
+                      <Link
+                        href={`/students/${row.student_id}`}
+                        className="text-sky-800 underline-offset-2 hover:underline dark:text-sky-300"
+                      >
+                        {st.last_name} {st.first_name}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell className="text-left font-mono text-xs" dir="ltr">
-                    {row.students?.tz ?? "—"}
+                    {st?.tz ?? "—"}
                   </TableCell>
+                  <TableCell>{st ? pickLookupName(st.classes) : "—"}</TableCell>
+                  <TableCell>{st ? pickLookupName(st.tracks) : "—"}</TableCell>
+                  <TableCell>{st ? pickLookupName(st.specializations) : "—"}</TableCell>
+                  <TableCell>{st ? pickLookupName(st.secondary_specializations) : "—"}</TableCell>
+                  <TableCell>{st ? psychologyLabel(st.is_psychology) : "—"}</TableCell>
+                  <TableCell>{st ? teachingTrackTypeLabel(st.teaching_track_type) : "—"}</TableCell>
                   <TableCell>
                     <ExamStudentStatusBadge status={row.status} />
                   </TableCell>
@@ -213,10 +249,11 @@ export function ExamEditClient({ id }: { id: string }) {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+              );
+              })
             ) : (
               <TableRow>
-                <TableCell className="py-10 text-center text-zinc-500" colSpan={4}>
+                <TableCell className="py-10 text-center text-zinc-500" colSpan={10}>
                   אין תלמידות במבחן
                 </TableCell>
               </TableRow>

@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { pickLookupName } from "@/lib/lookups/display";
+import { psychologyLabel } from "@/lib/students/display";
+import { teachingTrackTypeLabel } from "@/lib/students/fields";
 import type { Student } from "@/lib/types/db";
 
 const filterControlClass =
@@ -227,7 +229,7 @@ export function StudentsListClient() {
             <span>{data?.students?.length ?? 0} תוצאות</span>
           )}
         </ListTableToolbar>
-        <Table className="min-w-[720px]">
+        <Table className="min-w-[1080px]">
           <TableHeader>
             <TableRow>
               <TableHead>שם</TableHead>
@@ -236,6 +238,9 @@ export function StudentsListClient() {
               <TableHead>כיתה</TableHead>
               <TableHead>מסלול</TableHead>
               <TableHead>התמחות</TableHead>
+              <TableHead>התמחות נוספת</TableHead>
+              <TableHead>פסיכולוגיה</TableHead>
+              <TableHead>סוג הוראה</TableHead>
               <TableHead className="w-[1%] whitespace-nowrap" />
             </TableRow>
           </TableHeader>
@@ -260,6 +265,9 @@ export function StudentsListClient() {
                   <TableCell>{pickLookupName(s.classes)}</TableCell>
                   <TableCell>{pickLookupName(s.tracks)}</TableCell>
                   <TableCell>{pickLookupName(s.specializations)}</TableCell>
+                  <TableCell>{pickLookupName(s.secondary_specializations)}</TableCell>
+                  <TableCell>{psychologyLabel(s.is_psychology)}</TableCell>
+                  <TableCell>{teachingTrackTypeLabel(s.teaching_track_type)}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Link href={`/students/${s.id}/edit`} className={LIST_ROW_LINK_CLASS}>
                       <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
@@ -270,7 +278,7 @@ export function StudentsListClient() {
               ))
             ) : (
               <TableRow>
-                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={7}>
+                <TableCell className="py-14 text-center text-slate-500 dark:text-zinc-400" colSpan={10}>
                   {isLoading ? "טוען…" : "אין תלמידות להצגה"}
                 </TableCell>
               </TableRow>

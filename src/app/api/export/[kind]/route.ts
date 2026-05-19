@@ -124,7 +124,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         שכבה: s.year_label ?? formatCohortGradeLabel(s.grade_level),
         כיתה: pickLookupName(s.classes),
         התמחות: pickLookupName(s.specializations),
+        התמחות_נוספת: pickLookupName(s.secondary_specializations),
         מסלול: pickLookupName(s.tracks),
+        פסיכולוגיה: s.is_psychology ? "כן" : "לא",
+        סוג_הוראה:
+          s.teaching_track_type === "full"
+            ? "מלא"
+            : s.teaching_track_type === "short"
+              ? "מקוצר"
+              : "",
+        הערות: (s.notes ?? "").trim(),
       }));
       return NextResponse.json({ rows: exportRows });
     }
