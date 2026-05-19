@@ -91,7 +91,7 @@ export function StudentDetailClient({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
-          <NotesButton entityType="student" entityId={id} />
+          <NotesButton entity="students" id={id} />
           <PrintButton />
           <Link
             href={`/students/${id}/edit`}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { createOneExam } from "@/lib/exams/createOneExam";
+import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { resolveTeacherAssignmentForGrade } from "@/lib/exams/resolveAssignmentForGrade";
 import { getGradeLevelOptionById } from "@/lib/gradeLevels/options";
 import type { TeachingTrackType } from "@/lib/types/db";
