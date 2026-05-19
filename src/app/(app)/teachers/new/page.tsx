@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { TeacherFormFields } from "@/components/teachers/TeacherFormFields";
 import { hasAppSession } from "@/lib/auth/passwordSession";
 import { parseTeacherBody } from "@/lib/teachers/validation";
+import { getActiveAcademicYear } from "@/lib/academicYears/years";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,11 @@ export default function NewTeacherPage() {
     if (parsed.error) throw new Error(parsed.error);
 
     const supabase = createSupabaseAdminClient();
+    const year = await getActiveAcademicYear(supabase);
+    if (!year) throw new Error("לא הוגדרה שנה פעילה — צרי שנה בהגדרות");
+
     const { error } = await supabase.from("teachers").insert({
+      academic_year_id: year.id,
       first_name: parsed.first_name,
       last_name: parsed.last_name,
       tz: parsed.tz,
@@ -38,7 +43,7 @@ export default function NewTeacherPage() {
         <div>
           <h1 className="text-2xl font-semibold">הוספת מורה</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            פרטי המורה נשמרים פעם אחת — השיבוצים מקושרים למורה קיימת
+            המורה נשמרת לשנת הלימודים הפעילה — כל שנה היא מערכת נפרדת
           </p>
         </div>
         <Link

@@ -1,6 +1,7 @@
 -- הרצה אחת ב-Supabase SQL Editor: מוחק את כל הטבלאות ויוצר מחדש.
--- מערכת שנים עצמאיות: כל נתון שייך ל-academic_year_id + grade_level (א/ב/ג) בלבד.
--- ללא מחזורים, ללא year_group, ללא system_settings.
+-- מערכת שנים עצמאיות (school years): כל נתון שייך ל-academic_year_id בלבד.
+-- כיתות / התמחויות / מסלולים / מורות / תלמידות / שיבוצים / מבחנים — לפי שנה.
+-- ללא מחזורים, ללא קידום, ללא העתקה בין שנים. grade_level: א / ב / ג בלבד.
 -- חשוב: להריץ את הקובץ מהשורה הראשונה עד האחרונה.
 
 drop view if exists public.active_cohorts_view;
@@ -59,32 +60,59 @@ create type public.student_status as enum ('active', 'left', 'graduated');
 create table public.academic_years (
   id uuid primary key default gen_random_uuid(),
   year_name text not null unique,
+  start_date date,
+  end_date date,
   is_active boolean not null default false,
   created_at timestamptz not null default now()
 );
 
+comment on table public.academic_years is
+  'שנת לימודים עצמאית — כל הנתונים מקושרים לשנה; אין סנכרון בין שנים';
+
 create unique index uq_academic_years_one_active on public.academic_years (is_active) where is_active = true;
+
+insert into public.academic_years (year_name, is_active) values
+  ('תשפ״ו', true)
+on conflict (year_name) do nothing;
 
 create table public.classes (
   id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   name text not null,
   is_active boolean not null default true,
-  unique (name)
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
+
+create unique index uq_classes_name_per_year
+  on public.classes (academic_year_id, name)
+  where deleted_at is null;
 
 create table public.specializations (
   id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   name text not null,
   is_active boolean not null default true,
-  unique (name)
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
+
+create unique index uq_specializations_name_per_year
+  on public.specializations (academic_year_id, name)
+  where deleted_at is null;
 
 create table public.tracks (
   id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   name text not null,
   is_active boolean not null default true,
-  unique (name)
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
+
+create unique index uq_tracks_name_per_year
+  on public.tracks (academic_year_id, name)
+  where deleted_at is null;
 
 create table public.grade_level_options (
   id uuid primary key default gen_random_uuid(),
@@ -106,12 +134,16 @@ create table public.users (
   full_name text not null default '',
   active boolean not null default true,
   created_at timestamptz not null default now(),
-  deleted_at timestamptz,
-  unique (username)
+  deleted_at timestamptz
 );
+
+create unique index users_username_active_key
+  on public.users (username)
+  where deleted_at is null;
 
 create table public.teachers (
   id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   first_name text not null,
   last_name text not null,
   full_name_generated text generated always as (trim(first_name || ' ' || last_name)) stored,
@@ -122,6 +154,10 @@ create table public.teachers (
   deleted_at timestamptz
 );
 
+create unique index uq_teachers_tz_per_year
+  on public.teachers (academic_year_id, tz)
+  where deleted_at is null and tz is not null;
+
 alter table public.teachers add constraint teachers_tz_format_check
   check (tz is null or tz ~ '^\d{1,9}$');
 
@@ -130,6 +166,10 @@ alter table public.teachers add constraint teachers_email_format_check
 
 create index idx_teachers_name on public.teachers (first_name, last_name);
 create index idx_teachers_email on public.teachers (email) where email is not null;
+create index idx_teachers_year on public.teachers (academic_year_id);
+create index idx_classes_year on public.classes (academic_year_id);
+create index idx_specializations_year on public.specializations (academic_year_id);
+create index idx_tracks_year on public.tracks (academic_year_id);
 
 create table public.students (
   id uuid primary key default gen_random_uuid(),
@@ -415,18 +455,36 @@ create or replace function public.assignments_validate_target()
 returns trigger language plpgsql as $$
 begin
   if new.class_id is not null then
-    if not exists (select 1 from public.classes c where c.id = new.class_id and c.is_active) then
-      raise exception 'class_id invalid or inactive';
+    if not exists (
+      select 1 from public.classes c
+      where c.id = new.class_id
+        and c.academic_year_id = new.academic_year_id
+        and c.is_active
+        and c.deleted_at is null
+    ) then
+      raise exception 'class_id invalid, inactive, or wrong school year';
     end if;
   end if;
   if new.specialization_id is not null then
-    if not exists (select 1 from public.specializations s where s.id = new.specialization_id and s.is_active) then
-      raise exception 'specialization_id invalid or inactive';
+    if not exists (
+      select 1 from public.specializations s
+      where s.id = new.specialization_id
+        and s.academic_year_id = new.academic_year_id
+        and s.is_active
+        and s.deleted_at is null
+    ) then
+      raise exception 'specialization_id invalid, inactive, or wrong school year';
     end if;
   end if;
   if new.track_id is not null then
-    if not exists (select 1 from public.tracks t where t.id = new.track_id and t.is_active) then
-      raise exception 'track_id invalid or inactive';
+    if not exists (
+      select 1 from public.tracks t
+      where t.id = new.track_id
+        and t.academic_year_id = new.academic_year_id
+        and t.is_active
+        and t.deleted_at is null
+    ) then
+      raise exception 'track_id invalid, inactive, or wrong school year';
     end if;
   end if;
   return new;
@@ -475,18 +533,27 @@ create or replace function public.exams_validate_target()
 returns trigger language plpgsql as $$
 begin
   if new.class_id is not null then
-    if not exists (select 1 from public.classes c where c.id = new.class_id) then
-      raise exception 'exam class_id invalid';
+    if not exists (
+      select 1 from public.classes c
+      where c.id = new.class_id and c.academic_year_id = new.academic_year_id
+    ) then
+      raise exception 'exam class_id invalid or wrong school year';
     end if;
   end if;
   if new.specialization_id is not null then
-    if not exists (select 1 from public.specializations s where s.id = new.specialization_id) then
-      raise exception 'exam specialization_id invalid';
+    if not exists (
+      select 1 from public.specializations s
+      where s.id = new.specialization_id and s.academic_year_id = new.academic_year_id
+    ) then
+      raise exception 'exam specialization_id invalid or wrong school year';
     end if;
   end if;
   if new.track_id is not null then
-    if not exists (select 1 from public.tracks t where t.id = new.track_id) then
-      raise exception 'exam track_id invalid';
+    if not exists (
+      select 1 from public.tracks t
+      where t.id = new.track_id and t.academic_year_id = new.academic_year_id
+    ) then
+      raise exception 'exam track_id invalid or wrong school year';
     end if;
   end if;
   return new;
@@ -663,17 +730,35 @@ alter table public.exam_tracking enable row level security;
 alter table public.student_history enable row level security;
 alter table public.audit_logs enable row level security;
 
-insert into public.classes (name) values
-  ('יא1'), ('יא2'), ('יב1'), ('יב2')
-on conflict (name) do nothing;
+insert into public.classes (academic_year_id, name)
+select y.id, v.name
+from public.academic_years y
+cross join (values ('יא1'), ('יא2'), ('יב1'), ('יב2')) as v(name)
+where y.is_active = true
+  and not exists (
+    select 1 from public.classes c
+    where c.academic_year_id = y.id and c.name = v.name and c.deleted_at is null
+  );
 
-insert into public.specializations (name) values
-  ('גרפיקה'), ('תכנות'), ('חשבונאות')
-on conflict (name) do nothing;
+insert into public.specializations (academic_year_id, name)
+select y.id, v.name
+from public.academic_years y
+cross join (values ('גרפיקה'), ('תכנות'), ('חשבונאות')) as v(name)
+where y.is_active = true
+  and not exists (
+    select 1 from public.specializations s
+    where s.academic_year_id = y.id and s.name = v.name and s.deleted_at is null
+  );
 
-insert into public.tracks (name) values
-  ('הוראה'), ('הוראה קצרה'), ('ללא הוראה')
-on conflict (name) do nothing;
+insert into public.tracks (academic_year_id, name)
+select y.id, v.name
+from public.academic_years y
+cross join (values ('הוראה'), ('הוראה קצרה'), ('ללא הוראה')) as v(name)
+where y.is_active = true
+  and not exists (
+    select 1 from public.tracks t
+    where t.academic_year_id = y.id and t.name = v.name and t.deleted_at is null
+  );
 
 insert into public.grade_level_options (name, grade_levels) values
   ('א', array['א']::text[]),
@@ -682,8 +767,14 @@ insert into public.grade_level_options (name, grade_levels) values
   ('א+ב', array['א', 'ב']::text[])
 on conflict (name) do nothing;
 
-insert into public.academic_years (year_name, is_active) values
-  ('2026', true)
-on conflict (year_name) do nothing;
+create or replace view public.school_years as
+  select
+    id,
+    year_name as name,
+    start_date,
+    end_date,
+    is_active,
+    created_at
+  from public.academic_years;
 
 notify pgrst, 'reload schema';

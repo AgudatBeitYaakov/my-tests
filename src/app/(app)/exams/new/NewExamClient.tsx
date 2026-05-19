@@ -40,7 +40,7 @@ export function NewExamClient() {
   const { viewingYear, readOnly } = useAcademicYear();
 
   const [teacherId, setTeacherId] = useState("");
-  const [gradeLevelOptionId, setGradeLevelOptionId] = useState("");
+  const [gradeLevelOptionIds, setGradeLevelOptionIds] = useState<string[]>([]);
   const assignUrl = useMemo(() => {
     if (!teacherId) return null;
     const p = new URLSearchParams({ teacher_id: teacherId });
@@ -54,14 +54,21 @@ export function NewExamClient() {
   );
 
   const gradeOptions = gradeData?.items ?? [];
-  const selectedGradeOption = gradeOptions.find((o) => o.id === gradeLevelOptionId);
+
+  const selectedGradeLevels = useMemo(() => {
+    const levels = new Set<GradeLevel>();
+    for (const id of gradeLevelOptionIds) {
+      const opt = gradeOptions.find((o) => o.id === id);
+      opt?.grade_levels.forEach((g) => levels.add(g));
+    }
+    return levels;
+  }, [gradeLevelOptionIds, gradeOptions]);
 
   const activeAssignments = useMemo(() => {
     const all = aData?.assignments ?? [];
-    if (!selectedGradeOption?.grade_levels?.length) return all;
-    const levels = new Set(selectedGradeOption.grade_levels);
-    return all.filter((a) => levels.has(a.grade_level as GradeLevel));
-  }, [aData, selectedGradeOption]);
+    if (!selectedGradeLevels.size) return all;
+    return all.filter((a) => selectedGradeLevels.has(a.grade_level as GradeLevel));
+  }, [aData, selectedGradeLevels]);
 
   const [assignmentId, setAssignmentId] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -80,7 +87,7 @@ export function NewExamClient() {
 
   useEffect(() => {
     setAssignmentId("");
-  }, [teacherId, gradeLevelOptionId]);
+  }, [teacherId, gradeLevelOptionIds]);
 
   useEffect(() => {
     if (selected?.teaching_mode) {
@@ -93,8 +100,8 @@ export function NewExamClient() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (readOnly) return alert("שנה בארכיון — צפייה בלבד");
-    if (!teacherId || !gradeLevelOptionId || !selected || !examDate) {
-      alert("מלאי מורה, שכבה, שיבוץ ותאריך");
+    if (!teacherId || !gradeLevelOptionIds.length || !selected || !examDate) {
+      alert("מלאי מורה, שכבה (אחת או יותר), שיבוץ ותאריך");
       return;
     }
     if (isTeachingTarget && !teachingTrackType) {
@@ -110,7 +117,7 @@ export function NewExamClient() {
           teacher_id: teacherId,
           subject: selected.subject,
           exam_date: examDate,
-          grade_level_option_id: gradeLevelOptionId,
+          grade_level_option_ids: gradeLevelOptionIds,
           teacher_assignment_id: selected.id,
           teaching_track_type: isTeachingTarget ? teachingTrackType : null,
         }),
@@ -139,7 +146,7 @@ export function NewExamClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">יצירת מבחן</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            מורה → שכבה → שיבוץ → תאריך. בחירת «א+ב» יוצרת מבחן נפרד לכל שכבה באותו יעד.
+            מורה → שכבה → שיבוץ → תאריך. אפשר לסמן כמה שכבות (למשל «ג» וגם «א+ב») — נוצר מבחן נפרד לכל שכבה באותו יעד.
             {viewingYear ? ` (${viewingYear.year_name})` : ""}
           </p>
         </div>
@@ -156,35 +163,51 @@ export function NewExamClient() {
           value={teacherId}
           onChange={(id) => {
             setTeacherId(id);
-            setGradeLevelOptionId("");
+            setGradeLevelOptionIds([]);
           }}
           disabled={readOnly}
           required
           label="מורה"
         />
 
-        <label className="block">
-          <span className="text-sm font-medium text-zinc-700">שכבה *</span>
-          <select
-            className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
-            value={gradeLevelOptionId}
-            onChange={(e) => setGradeLevelOptionId(e.target.value)}
-            required
-            disabled={!teacherId || readOnly}
-          >
-            <option value="">— בחרי —</option>
-            {gradeOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+        <fieldset className="block" disabled={!teacherId || readOnly}>
+          <legend className="text-sm font-medium text-zinc-700">שכבות * (אפשר כמה)</legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {gradeOptions.map((o) => {
+              const checked = gradeLevelOptionIds.includes(o.id);
+              return (
+                <label
+                  key={o.id}
+                  className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                    checked ? "border-zinc-900 bg-zinc-50" : "border-zinc-200"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      setGradeLevelOptionIds((prev) =>
+                        checked ? prev.filter((id) => id !== o.id) : [...prev, o.id],
+                      );
+                    }}
+                  />
+                  {o.name}
+                  <span className="text-xs text-zinc-500">({o.grade_levels.join(", ")})</span>
+                </label>
+              );
+            })}
+          </div>
           {!gradeOptions.length ? (
             <p className="mt-1 text-xs text-amber-800">
-              אין שכבות בלוקאפ — הוסיפי בהגדרות → שכבות
+              אין שכבות בלוקאפ — הוסיפי בהגדרות → שכבות (למשל: א, ב, ג, א+ב)
             </p>
           ) : null}
-        </label>
+          {gradeLevelOptionIds.length > 1 ? (
+            <p className="mt-2 text-xs text-zinc-600">
+              נבחרו {selectedGradeLevels.size} שכבות — ייווצרו עד {selectedGradeLevels.size} מבחנים (אותו מקצוע ויעד)
+            </p>
+          ) : null}
+        </fieldset>
 
         <label className="block">
           <span className="text-sm font-medium text-zinc-700">שיבוץ (מקצוע · יעד)</span>
@@ -196,7 +219,7 @@ export function NewExamClient() {
               setTeachingTrackType("");
             }}
             required
-            disabled={!teacherId || !gradeLevelOptionId || readOnly}
+            disabled={!teacherId || !gradeLevelOptionIds.length || readOnly}
           >
             <option value="">— בחרי —</option>
             {activeAssignments.map((a) => (
@@ -211,12 +234,12 @@ export function NewExamClient() {
               </option>
             ))}
           </select>
-          {teacherId && gradeLevelOptionId && aLoad ? (
+          {teacherId && gradeLevelOptionIds.length > 0 && aLoad ? (
             <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
               <Spinner className="size-4" />
               טוען שיבוצים…
             </div>
-          ) : teacherId && gradeLevelOptionId && !aLoad && !activeAssignments.length ? (
+          ) : teacherId && gradeLevelOptionIds.length > 0 && !aLoad && !activeAssignments.length ? (
             <p className="mt-1 text-xs text-amber-800">
               אין שיבוצים תואמים למורה ולשכבה שנבחרו
             </p>

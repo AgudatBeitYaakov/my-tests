@@ -4,7 +4,7 @@ import type { AcademicYearRow } from "@/lib/academicYears/types";
 export async function listAcademicYears(supabase: SupabaseClient): Promise<AcademicYearRow[]> {
   const { data, error } = await supabase
     .from("academic_years")
-    .select("id, year_name, is_active, created_at")
+    .select("id, year_name, start_date, end_date, is_active, created_at")
     .order("year_name", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as AcademicYearRow[];
@@ -13,7 +13,7 @@ export async function listAcademicYears(supabase: SupabaseClient): Promise<Acade
 export async function getActiveAcademicYear(supabase: SupabaseClient): Promise<AcademicYearRow | null> {
   const { data, error } = await supabase
     .from("academic_years")
-    .select("id, year_name, is_active, created_at")
+    .select("id, year_name, start_date, end_date, is_active, created_at")
     .eq("is_active", true)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -26,7 +26,7 @@ export async function getAcademicYearById(
 ): Promise<AcademicYearRow | null> {
   const { data, error } = await supabase
     .from("academic_years")
-    .select("id, year_name, is_active, created_at")
+    .select("id, year_name, start_date, end_date, is_active, created_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -37,6 +37,7 @@ export async function createAcademicYear(
   supabase: SupabaseClient,
   yearName: string,
   setActive: boolean,
+  dates?: { start_date?: string | null; end_date?: string | null },
 ): Promise<AcademicYearRow> {
   const name = yearName.trim();
   if (!name) throw new Error("שם שנה חובה");
@@ -47,8 +48,13 @@ export async function createAcademicYear(
 
   const { data, error } = await supabase
     .from("academic_years")
-    .insert({ year_name: name, is_active: setActive })
-    .select("id, year_name, is_active, created_at")
+    .insert({
+      year_name: name,
+      is_active: setActive,
+      start_date: dates?.start_date ?? null,
+      end_date: dates?.end_date ?? null,
+    })
+    .select("id, year_name, start_date, end_date, is_active, created_at")
     .single();
 
   if (error) throw new Error(error.message);
@@ -68,7 +74,7 @@ export async function setActiveAcademicYear(
     .from("academic_years")
     .update({ is_active: true })
     .eq("id", yearId)
-    .select("id, year_name, is_active, created_at")
+    .select("id, year_name, start_date, end_date, is_active, created_at")
     .single();
 
   if (error) throw new Error(error.message);

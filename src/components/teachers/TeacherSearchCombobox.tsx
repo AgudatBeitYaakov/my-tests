@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useId, useRef, useState } from "react";
 import useSWR from "swr";
+import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { teacherDisplayName } from "@/lib/teachers/display";
 import type { Teacher } from "@/lib/types/db";
 
@@ -29,6 +30,7 @@ export function TeacherSearchCombobox({
   label = "בחירת מורה",
   placeholder = "הקלידי שם פרטי, משפחה או שם מלא…",
 }: Props) {
+  const { viewingYear } = useAcademicYear();
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -36,7 +38,12 @@ export function TeacherSearchCombobox({
   const deferred = useDeferredValue(query.trim());
 
   const searchUrl =
-    deferred.length >= 1 ? `/api/teachers?q=${encodeURIComponent(deferred)}&limit=12` : null;
+    deferred.length >= 1
+      ? withYearQuery(
+          `/api/teachers?q=${encodeURIComponent(deferred)}&limit=12`,
+          viewingYear?.id,
+        )
+      : null;
 
   const { data, isLoading } = useSWR(searchUrl, fetcher);
 

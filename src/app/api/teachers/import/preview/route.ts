@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import * as XLSX from "xlsx";
 import {
   applyTeacherColumnMap,
@@ -80,8 +81,12 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(
+    supabase,
+    scopeFromSearchParams(new URL(request.url).searchParams),
+  );
   const { data: teachers, error } = await notDeleted(
-    supabase.from("teachers").select(TEACHER_COLUMNS),
+    supabase.from("teachers").select(TEACHER_COLUMNS).eq("academic_year_id", scope.year.id),
   );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

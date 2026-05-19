@@ -36,6 +36,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (gErr || !row) return NextResponse.json({ error: "רשומה לא נמצאה" }, { status: 404 });
 
+  const { data: examRow } = await supabase
+    .from("exams")
+    .select("academic_year_id")
+    .eq("id", row.exam_id as string)
+    .maybeSingle();
+  const examYearId = examRow?.academic_year_id as string | undefined;
+
   if (!fromStudentCard) {
     const locked = await assertExamNotLocked(supabase, row.exam_id as string);
     if (!locked.ok) return NextResponse.json({ error: locked.error }, { status: 400 });
@@ -60,10 +67,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     );
     if (!dupMakeup.ok) return NextResponse.json({ error: dupMakeup.error }, { status: 400 });
 
+    if (!examYearId) {
+      return NextResponse.json({ error: "מבחן לא נמצא" }, { status: 400 });
+    }
+
     const { data: makeupRow, error: mErr } = await supabase
       .from("makeup_exams")
       .upsert(
         {
+          academic_year_id: examYearId,
           student_id: row.student_id,
           exam_id: row.exam_id,
           status: "open",

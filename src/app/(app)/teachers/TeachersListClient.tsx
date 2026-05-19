@@ -16,6 +16,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { teacherDisplayName } from "@/lib/teachers/display";
 import type { Teacher } from "@/lib/types/db";
 
@@ -25,14 +26,15 @@ const fetcher = (url: string) => fetch(url).then((r) => {
 });
 
 export function TeachersListClient() {
+  const { viewingYear } = useAcademicYear();
   const [q, setQ] = useState("");
   const deferred = useDeferredValue(q.trim());
   const url = useMemo(() => {
     const p = new URLSearchParams();
     if (deferred) p.set("q", deferred);
     const qs = p.toString();
-    return `/api/teachers${qs ? `?${qs}` : ""}`;
-  }, [deferred]);
+    return withYearQuery(`/api/teachers${qs ? `?${qs}` : ""}`, viewingYear?.id);
+  }, [deferred, viewingYear?.id]);
 
   const { data, error, isLoading, mutate } = useSWR<{ teachers: Teacher[] }>(url, fetcher);
   const count = data?.teachers?.length ?? 0;
@@ -146,8 +148,8 @@ export function TeachersListClient() {
         <TableClearFooter
           label="מורות"
           count={count}
-          apiPath="/api/teachers/clear-all"
-          confirmHint="יימחקו קודם כל המבחנים במערכת (כולל מעקב והשלמות), ואז כל המורות והשיבוצים."
+          apiPath={withYearQuery("/api/teachers/clear-all", viewingYear?.id)}
+          confirmHint="כל המורות של שנת הלימודים הנבחרת יוסתרו מהרשימה (מחיקה רכה)."
           onCleared={() => void mutate()}
         />
       </ListDataCard>

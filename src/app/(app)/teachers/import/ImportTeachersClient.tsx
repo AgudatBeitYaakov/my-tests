@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileDown, List } from "lucide-react";
 import { useCallback, useState } from "react";
+import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { ConfirmDangerDialog } from "@/components/ui/ConfirmDangerDialog";
 import { ListPageHeader, LIST_SECONDARY_LINK_CLASS } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
@@ -33,6 +34,7 @@ const MAP_FIELDS: { key: keyof TeacherColumnMap; label: string }[] = [
 
 export function ImportTeachersClient() {
   const router = useRouter();
+  const { viewingYear } = useAcademicYear();
 
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState<PreviewRow[] | null>(null);
@@ -56,7 +58,10 @@ export function ImportTeachersClient() {
       const fd = new FormData();
       fd.set("file", file);
       if (Object.keys(map).length) fd.set("column_map", JSON.stringify(map));
-      const r = await fetch("/api/teachers/import/preview", { method: "POST", body: fd });
+      const r = await fetch(withYearQuery("/api/teachers/import/preview", viewingYear?.id), {
+        method: "POST",
+        body: fd,
+      });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
         const headers = (j as { headers?: string[] }).headers ?? [];
@@ -77,7 +82,7 @@ export function ImportTeachersClient() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [viewingYear?.id]);
 
   const onFile = useCallback(
     (file: File | null) => {
@@ -105,7 +110,7 @@ export function ImportTeachersClient() {
           email: r.email,
           notes: r.notes,
         }));
-      const r = await fetch("/api/teachers/import/commit", {
+      const r = await fetch(withYearQuery("/api/teachers/import/commit", viewingYear?.id), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: payload, skipDuplicates: true }),

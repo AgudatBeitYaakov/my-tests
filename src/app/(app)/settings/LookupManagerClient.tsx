@@ -3,7 +3,9 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
+import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import type { LookupEntitySlug } from "@/lib/lookups/entities";
+import { isYearScopedLookup } from "@/lib/lookups/yearScope";
 import { ENTITY_LABELS } from "@/lib/lookups/entities";
 import {
   ListDataCard,
@@ -24,7 +26,10 @@ const fetcher = (url: string) => fetch(url).then((r) => {
 type Item = { id: string; name: string };
 
 export function LookupManagerClient({ entity }: { entity: LookupEntitySlug }) {
-  const url = `/api/lookups/${entity}`;
+  const { viewingYear } = useAcademicYear();
+  const url = isYearScopedLookup(entity)
+    ? withYearQuery(`/api/lookups/${entity}`, viewingYear?.id)
+    : `/api/lookups/${entity}`;
   const { data, error, isLoading, mutate } = useSWR<{ items: Item[] }>(url, fetcher);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -198,7 +203,11 @@ export function LookupManagerClient({ entity }: { entity: LookupEntitySlug }) {
         <TableClearFooter
           label={title}
           count={count}
-          apiPath={`/api/lookups/${entity}/clear-all`}
+          apiPath={
+            isYearScopedLookup(entity)
+              ? withYearQuery(`/api/lookups/${entity}/clear-all`, viewingYear?.id)
+              : `/api/lookups/${entity}/clear-all`
+          }
           confirmHint="אם יש תלמידות או שיבוצים שמפנים לערכים האלה, המחיקה עלולה להיכשל — יש לנקות קודם."
           onCleared={() => void mutate()}
         />

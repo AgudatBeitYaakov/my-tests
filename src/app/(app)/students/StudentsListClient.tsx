@@ -56,9 +56,18 @@ export function StudentsListClient() {
   const { data, error, isLoading, mutate } = useSWR<{ students: Student[] }>(url, fetcher);
   const count = data?.students?.length ?? 0;
 
-  const { data: clData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/classes", fetcher);
-  const { data: spData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/specializations", fetcher);
-  const { data: trData } = useSWR<{ items: { id: string; name: string }[] }>("/api/lookups/tracks", fetcher);
+  const { data: clData } = useSWR<{ items: { id: string; name: string }[] }>(
+    withYearQuery("/api/lookups/classes", viewingYear?.id),
+    fetcher,
+  );
+  const { data: spData } = useSWR<{ items: { id: string; name: string }[] }>(
+    withYearQuery("/api/lookups/specializations", viewingYear?.id),
+    fetcher,
+  );
+  const { data: trData } = useSWR<{ items: { id: string; name: string }[] }>(
+    withYearQuery("/api/lookups/tracks", viewingYear?.id),
+    fetcher,
+  );
 
   return (
     <div className="space-y-8">

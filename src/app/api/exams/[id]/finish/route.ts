@@ -10,7 +10,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
   const { data: exam, error: examErr } = await supabase
     .from("exams")
-    .select("id, makeup_locked_at")
+    .select("id, makeup_locked_at, academic_year_id")
     .eq("id", examId)
     .maybeSingle();
   if (examErr) return NextResponse.json({ error: examErr.message }, { status: 500 });
@@ -33,6 +33,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const inserts = studentIds.map((student_id) => ({
+    academic_year_id: exam.academic_year_id as string,
     student_id,
     exam_id: examId,
     status: "open" as const,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveAcademicYearScope, readOnlyResponse, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import {
   buildExistingTeacherMaps,
   teacherImportKey,
@@ -25,8 +26,16 @@ export async function POST(request: Request) {
   if (!rowsIn.length) return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
 
   const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(
+    supabase,
+    scopeFromSearchParams(new URL(request.url).searchParams),
+  );
+  if (scope.readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+
   const { data: teachers, error: loadErr } = await notDeleted(
-    supabase.from("teachers").select(TEACHER_COLUMNS),
+    supabase.from("teachers").select(TEACHER_COLUMNS).eq("academic_year_id", scope.year.id),
   );
   if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
 
@@ -69,6 +78,7 @@ export async function POST(request: Request) {
     }
     existingKeys.add(key);
     toInsert.push({
+      academic_year_id: scope.year.id,
       first_name: r.resolved.first_name,
       last_name: r.resolved.last_name,
       tz: r.resolved.tz,

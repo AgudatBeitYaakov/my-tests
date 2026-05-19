@@ -68,9 +68,18 @@ export function AssignmentsClient() {
     assignments: AssignmentRow[];
     grades?: GradeOption[];
   }>(assignmentsUrl, fetcher);
-  const { data: clData } = useSWR<{ items: LookupItem[] }>("/api/lookups/classes", fetcher);
-  const { data: spData } = useSWR<{ items: LookupItem[] }>("/api/lookups/specializations", fetcher);
-  const { data: trData } = useSWR<{ items: LookupItem[] }>("/api/lookups/tracks", fetcher);
+  const { data: clData } = useSWR<{ items: LookupItem[] }>(
+    withYearQuery("/api/lookups/classes", viewingYear?.id),
+    fetcher,
+  );
+  const { data: spData } = useSWR<{ items: LookupItem[] }>(
+    withYearQuery("/api/lookups/specializations", viewingYear?.id),
+    fetcher,
+  );
+  const { data: trData } = useSWR<{ items: LookupItem[] }>(
+    withYearQuery("/api/lookups/tracks", viewingYear?.id),
+    fetcher,
+  );
 
   const [teacherId, setTeacherId] = useState("");
   const [subject, setSubject] = useState("");

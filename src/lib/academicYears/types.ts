@@ -1,6 +1,8 @@
 export type AcademicYearRow = {
   id: string;
   year_name: string;
+  start_date?: string | null;
+  end_date?: string | null;
   is_active: boolean;
   created_at?: string;
 };

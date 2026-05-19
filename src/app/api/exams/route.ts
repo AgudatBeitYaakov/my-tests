@@ -76,6 +76,7 @@ export async function POST(request: Request) {
     exam_date?: string;
     grade_level?: string;
     grade_level_option_id?: string;
+    grade_level_option_ids?: string[];
     teacher_assignment_id?: string;
     teaching_track_type?: TeachingTrackType | null;
   };
@@ -98,14 +99,23 @@ export async function POST(request: Request) {
     return NextResponse.json(readOnlyResponse(), { status: 403 });
   }
 
+  const optionIds = [
+    ...(body.grade_level_option_ids ?? []).map((id) => id.trim()).filter(Boolean),
+    ...(body.grade_level_option_id?.trim() ? [body.grade_level_option_id.trim()] : []),
+  ];
+  const uniqueOptionIds = [...new Set(optionIds)];
+
   let gradeLevels: GradeLevel[];
-  const optionId = body.grade_level_option_id?.trim();
-  if (optionId) {
-    const opt = await getGradeLevelOptionById(supabase, optionId);
-    if (!opt?.is_active) {
-      return NextResponse.json({ error: "אפשרות שכבה לא נמצאה" }, { status: 400 });
+  if (uniqueOptionIds.length) {
+    gradeLevels = [];
+    for (const optionId of uniqueOptionIds) {
+      const opt = await getGradeLevelOptionById(supabase, optionId);
+      if (!opt?.is_active) {
+        return NextResponse.json({ error: `אפשרות שכבה לא נמצאה (${optionId})` }, { status: 400 });
+      }
+      gradeLevels.push(...opt.grade_levels);
     }
-    gradeLevels = opt.grade_levels;
+    gradeLevels = [...new Set(gradeLevels)];
   } else {
     const gl = parseGradeLevel(String(body.grade_level ?? ""));
     if (!gl) return NextResponse.json({ error: "בחרי שכבה" }, { status: 400 });
@@ -113,7 +123,7 @@ export async function POST(request: Request) {
   }
 
   if (!gradeLevels.length) {
-    return NextResponse.json({ error: "בחרי שכבה" }, { status: 400 });
+    return NextResponse.json({ error: "בחרי לפחות שכבה אחת" }, { status: 400 });
   }
 
   const { data: templateTa, error: taLoadErr } = await supabase

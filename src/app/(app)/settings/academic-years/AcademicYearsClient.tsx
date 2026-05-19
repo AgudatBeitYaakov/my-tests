@@ -68,14 +68,17 @@ export function AcademicYearsClient() {
     <div className="space-y-8">
       <ListPageHeader
         title="שנות לימוד"
-        subtitle="כל הנתונים במערכת שייכים לשנה אחת. רק שנה אחת פעילה בכל זמן."
+        subtitle="כל שנה היא מערכת עצמאית — אין העתקה או קידום בין שנים. רק שנה אחת פעילה."
       />
 
       <form onSubmit={createYear} className="rounded-2xl border bg-white p-6 dark:bg-zinc-900/40">
-        <h2 className="text-lg font-semibold">שנה חדשה</h2>
+        <h2 className="text-lg font-semibold">פתיחת שנת לימודים</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          השנה הקודמת נשארת בארכיון. מעלים מחדש תלמידות, מורות, כיתות ושיבוצים לשנה החדשה.
+        </p>
         <div className="mt-4 flex flex-wrap items-end gap-4">
           <label className="block text-sm">
-            <span className="font-medium">שם שנה (למשל 2027)</span>
+            <span className="font-medium">שם שנה (למשל תשפ״ז)</span>
             <input
               required
               value={yearName}
@@ -92,7 +95,7 @@ export function AcademicYearsClient() {
             disabled={saving}
             className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
-            {saving ? "יוצר…" : "צור שנה"}
+            {saving ? "פותח…" : "פתיחת שנה"}
           </button>
         </div>
         {msg ? <p className="mt-3 text-sm text-zinc-600">{msg}</p> : null}

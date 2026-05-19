@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveAcademicYearScope, readOnlyResponse, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import { TEACHER_COLUMNS } from "@/lib/teachers/db";
 import { parseTeacherBody } from "@/lib/teachers/validation";
 import { notDeleted } from "@/lib/db/softDelete";
@@ -13,7 +14,10 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 200;
 
   const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
+
   let query = notDeleted(supabase.from("teachers").select(TEACHER_COLUMNS))
+    .eq("academic_year_id", scope.year.id)
     .order("last_name")
     .order("first_name")
     .limit(limit);
@@ -36,9 +40,18 @@ export async function POST(request: Request) {
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(
+    supabase,
+    scopeFromSearchParams(new URL(request.url).searchParams),
+  );
+  if (scope.readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+
   const { data, error } = await supabase
     .from("teachers")
     .insert({
+      academic_year_id: scope.year.id,
       first_name: parsed.first_name,
       last_name: parsed.last_name,
       tz: parsed.tz,

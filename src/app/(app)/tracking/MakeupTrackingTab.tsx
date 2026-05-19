@@ -2,20 +2,24 @@
 
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
+import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { ListDataCard, ListTableToolbar } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error("שגיאת טעינה");
-  return r.json();
-});
+const fetcher = async (url: string) => {
+  const r = await fetch(url);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j as { error?: string }).error ?? "שגיאת טעינה");
+  return j;
+};
 
 type GroupRow = {
   exam_id: string;
   teacher_name: string | null;
   subject: string;
   exam_date: string;
+  grade_level?: string;
   count: number;
   open_count: number;
   with_grade_count: number;
@@ -39,21 +43,25 @@ function fmtDt(iso: string | null) {
 }
 
 export function MakeupTrackingTab() {
+  const { viewingYear } = useAcademicYear();
   const [subjectFilter, setSubjectFilter] = useState("");
   const [completed, setCompleted] = useState<"" | "true" | "false">("false");
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
+    p.set("sync", "1");
     if (subjectFilter.trim()) p.set("subject", subjectFilter.trim());
     if (completed) p.set("completed", completed);
     const q = p.toString();
-    return `/api/makeup-tracking${q ? `?${q}` : ""}`;
-  }, [subjectFilter, completed]);
+    return withYearQuery(`/api/makeup-tracking?${q}`, viewingYear?.id);
+  }, [subjectFilter, completed, viewingYear?.id]);
 
   const { data, error, isLoading, mutate } = useSWR<{ groups: GroupRow[] }>(listUrl, fetcher);
   const [openExamId, setOpenExamId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const detailUrl = openExamId ? `/api/makeup-tracking/exams/${openExamId}` : null;
+  const detailUrl = openExamId
+    ? withYearQuery(`/api/makeup-tracking/exams/${openExamId}`, viewingYear?.id)
+    : null;
   const { data: detail, mutate: mutateDetail } = useSWR<{ items: DetailItem[] }>(detailUrl, fetcher);
 
   const refresh = useCallback(async () => {
@@ -88,13 +96,20 @@ export function MakeupTrackingTab() {
               <option value="true">הושלם</option>
             </select>
           </div>
-          {isLoading ? <Spinner className="size-4" /> : error ? <span className="text-red-600">{(error as Error).message}</span> : <span>{data?.groups?.length ?? 0} מבחנים</span>}
+          {isLoading ? (
+            <Spinner className="size-4" />
+          ) : error ? (
+            <span className="max-w-md text-sm text-red-600">{(error as Error).message}</span>
+          ) : (
+            <span>{data?.groups?.length ?? 0} מבחנים</span>
+          )}
         </ListTableToolbar>
         <Table className="min-w-[720px] text-sm">
           <TableHeader>
             <TableRow>
               <TableHead>מורה</TableHead>
               <TableHead>מקצוע</TableHead>
+              <TableHead>שכבה</TableHead>
               <TableHead>תאריך</TableHead>
               <TableHead>השלמות</TableHead>
               <TableHead />
@@ -105,10 +120,19 @@ export function MakeupTrackingTab() {
               <TableRow key={g.exam_id}>
                 <TableCell>{g.teacher_name ?? "—"}</TableCell>
                 <TableCell>{g.subject}</TableCell>
+                <TableCell>{g.grade_level ?? "—"}</TableCell>
                 <TableCell>{g.exam_date}</TableCell>
-                <TableCell>{g.open_count}/{g.count}</TableCell>
                 <TableCell>
-                  <button type="button" className="text-xs underline" onClick={() => setOpenExamId(g.exam_id)}>פתח</button>
+                  {g.open_count}/{g.count}
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    className="text-xs underline"
+                    onClick={() => setOpenExamId(g.exam_id)}
+                  >
+                    פתח
+                  </button>
                 </TableCell>
               </TableRow>
             ))}
@@ -121,7 +145,9 @@ export function MakeupTrackingTab() {
           <div className="h-full w-full max-w-xl overflow-auto bg-white p-4 shadow-xl">
             <div className="mb-3 flex justify-between">
               <h3 className="font-semibold">פירוט השלמות</h3>
-              <button type="button" onClick={() => setOpenExamId(null)}>סגור</button>
+              <button type="button" onClick={() => setOpenExamId(null)}>
+                סגור
+              </button>
             </div>
             <Table className="text-xs">
               <TableHeader>
@@ -135,23 +161,89 @@ export function MakeupTrackingTab() {
               <TableBody>
                 {(detail?.items ?? []).map((row) => {
                   const done = row.makeup_status === "completed";
-                  const name = row.student ? `${row.student.last_name} ${row.student.first_name}` : "—";
+                  const name = row.student
+                    ? `${row.student.last_name} ${row.student.first_name}`
+                    : "—";
                   return (
                     <TableRow key={row.id}>
                       <TableCell>{name}</TableCell>
                       <TableCell>
                         {fmtDt(row.sent_to_teacher_at)}
                         {!done && !row.sent_to_teacher_at ? (
-                          <button type="button" className="mr-1 underline" disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/makeup-tracking/${row.id}/sent-to-teacher`, { method: "POST" }); await refresh(); } catch (e) { alert((e as Error).message); } finally { setBusy(false); } }}>נשלח למורה</button>
+                          <button
+                            type="button"
+                            className="mr-1 underline"
+                            disabled={busy}
+                            onClick={async () => {
+                              setBusy(true);
+                              try {
+                                await api(`/api/makeup-tracking/${row.id}/sent-to-teacher`, {
+                                  method: "POST",
+                                });
+                                await refresh();
+                              } catch (e) {
+                                alert((e as Error).message);
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
+                          >
+                            נשלח למורה
+                          </button>
                         ) : null}
                       </TableCell>
                       <TableCell>
-                        <input type="number" className="w-16 border px-1" defaultValue={row.grade ?? ""} disabled={done || busy} onBlur={async (e) => { const v = e.target.value; if (!v && row.grade == null) return; setBusy(true); try { await api(`/api/makeup-tracking/${row.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ grade: v ? Number(v) : null }) }); await refresh(); } catch (err) { alert((err as Error).message); } finally { setBusy(false); } }} />
+                        <input
+                          type="number"
+                          className="w-16 border px-1"
+                          defaultValue={row.grade ?? ""}
+                          disabled={done || busy}
+                          onBlur={async (e) => {
+                            const v = e.target.value;
+                            if (!v && row.grade == null) return;
+                            setBusy(true);
+                            try {
+                              await api(`/api/makeup-tracking/${row.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ grade: v ? Number(v) : null }),
+                              });
+                              await refresh();
+                            } catch (err) {
+                              alert((err as Error).message);
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        />
                       </TableCell>
                       <TableCell>
                         {!done && row.grade != null ? (
-                          <button type="button" className="underline text-emerald-700" disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/makeup-tracking/${row.id}/complete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await refresh(); } catch (e) { alert((e as Error).message); } finally { setBusy(false); } }}>הושלם סופית</button>
-                        ) : done ? "הושלם" : null}
+                          <button
+                            type="button"
+                            className="text-emerald-700 underline"
+                            disabled={busy}
+                            onClick={async () => {
+                              setBusy(true);
+                              try {
+                                await api(`/api/makeup-tracking/${row.id}/complete`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: "{}",
+                                });
+                                await refresh();
+                              } catch (e) {
+                                alert((e as Error).message);
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
+                          >
+                            הושלם סופית
+                          </button>
+                        ) : done ? (
+                          "הושלם"
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );

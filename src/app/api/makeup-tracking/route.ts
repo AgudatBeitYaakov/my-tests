@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
+import {
+  backfillMakeupTrackingFromMakeups,
+  makeupTrackingTableHint,
+} from "@/lib/makeupTracking/sync";
 import { TEACHER_EMBED_IN_EXAM } from "@/lib/teachers/db";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -13,27 +18,44 @@ export async function GET(request: Request) {
   const examDateTo = searchParams.get("exam_date_to")?.trim();
   const hasGrade = searchParams.get("has_grade");
   const completed = searchParams.get("completed");
+  const sync = searchParams.get("sync") === "1";
 
   const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
+
+  if (sync) {
+    const backfill = await backfillMakeupTrackingFromMakeups(supabase, scope.year.id);
+    if (backfill.error) {
+      return NextResponse.json({ error: backfill.error }, { status: 500 });
+    }
+  }
 
   let q = supabase
     .from("makeup_tracking")
     .select(
       "id, exam_id, teacher_id, student_id, sent_to_teacher_at, grade_received_at, grade, makeup_exam_id",
-    );
+    )
+    .eq("academic_year_id", scope.year.id);
 
   if (teacherId) q = q.eq("teacher_id", teacherId);
 
   const { data: rows, error } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return NextResponse.json({ error: makeupTrackingTableHint(error.message) }, { status: 500 });
+  }
 
   const examIds = [...new Set((rows ?? []).map((r) => r.exam_id as string))];
   if (!examIds.length) return NextResponse.json({ groups: [] });
 
-  const { data: exams } = await supabase
+  const { data: exams, error: examsErr } = await supabase
     .from("exams")
-    .select(`id, subject, exam_date, teacher_id, ${TEACHER_EMBED_IN_EXAM}`)
-    .in("id", examIds);
+    .select(`id, subject, exam_date, teacher_id, grade_level, ${TEACHER_EMBED_IN_EXAM}`)
+    .in("id", examIds)
+    .eq("academic_year_id", scope.year.id);
+
+  if (examsErr) {
+    return NextResponse.json({ error: makeupTrackingTableHint(examsErr.message) }, { status: 500 });
+  }
 
   const examsBy = new Map(
     (exams ?? []).map((e) => {
@@ -42,6 +64,7 @@ export async function GET(request: Request) {
         subject: string;
         exam_date: string;
         teacher_id: string;
+        grade_level: string;
         teachers: unknown;
       };
       return [
@@ -50,6 +73,7 @@ export async function GET(request: Request) {
           subject: raw.subject,
           exam_date: raw.exam_date,
           teacher_id: raw.teacher_id,
+          grade_level: raw.grade_level,
           teacher_name:
             teacherEmbedDisplayName(
               raw.teachers as Parameters<typeof teacherEmbedDisplayName>[0],
@@ -79,6 +103,7 @@ export async function GET(request: Request) {
     teacher_name: string | null;
     subject: string;
     exam_date: string;
+    grade_level: string;
     count: number;
     open_count: number;
     with_grade_count: number;
@@ -114,6 +139,7 @@ export async function GET(request: Request) {
         teacher_name: exam.teacher_name,
         subject: exam.subject,
         exam_date: exam.exam_date,
+        grade_level: exam.grade_level,
         count: 0,
         open_count: 0,
         with_grade_count: 0,
