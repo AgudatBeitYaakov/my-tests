@@ -1,8 +1,19 @@
--- הרצה אחת ב-Supabase SQL Editor: מוחק את כל הטבלאות ויוצר מחדש.
--- מערכת שנים עצמאיות (school years): כל נתון שייך ל-academic_year_id בלבד.
--- כיתות / התמחויות / מסלולים / מורות / תלמידות / שיבוצים / מבחנים — לפי שנה.
--- ללא מחזורים, ללא קידום, ללא העתקה בין שנים. grade_level: א / ב / ג בלבד.
--- חשוב: להריץ את הקובץ מהשורה הראשונה עד האחרונה.
+-- =============================================================================
+-- RUN_FULL_DATABASE_RESET.sql — הרצה אחת מההתחלה (מוחק הכל ויוצר מחדש)
+-- =============================================================================
+-- Supabase → SQL Editor → העתיקי את כל הקובץ → Run
+--
+-- כולל את כל ה-PATCHים (אין צורך להריץ אותם בנפרד אחרי איפוס מלא):
+--   • PATCH_AUTH_USERS          — משתמשים, deleted_at, ייחודיות username
+--   • PATCH_SCHOOL_YEARS_ISOLATED — שנים עצמאיות, לוקאפים ומורות לפי שנה
+--   • PATCH_GRADE_LEVEL_OPTIONS — שכבות למבחנים (א, ב, ג, א+ב)
+--   • PATCH_MAKEUP_TRACKING     — מעקב השלמות + grade ב-makeup_exams
+--   • PATCH_STUDENT_EXTENSIONS  — התמחות שנייה, פסיכולוגיה, סוג הוראה
+--   • PATCH_REMAINING_FEATURES  — makeup_locked, snapshots, התראות, audit
+--
+-- מודל: כל שנת לימודים עצמאית (academic_year_id). אין מחזורים / קידום / העתקה.
+-- grade_level: א / ב / ג בלבד.
+-- =============================================================================
 
 drop view if exists public.active_cohorts_view;
 
@@ -43,6 +54,7 @@ drop function if exists public.assignments_validate_teaching_mode() cascade;
 drop function if exists public.exam_tracking_fill_academic_year() cascade;
 drop function if exists public.student_history_fill_academic_year() cascade;
 drop function if exists public.makeup_exams_fill_academic_year() cascade;
+drop function if exists public.teachers_validate_year_scope() cascade;
 
 drop type if exists public.student_status cascade;
 drop type if exists public.exam_student_status cascade;
@@ -378,6 +390,7 @@ create table public.makeup_tracking (
 create index idx_makeup_tracking_exam_id on public.makeup_tracking (exam_id);
 create index idx_makeup_tracking_teacher_id on public.makeup_tracking (teacher_id);
 create index idx_makeup_tracking_student_id on public.makeup_tracking (student_id);
+create index idx_makeup_tracking_makeup_exam_id on public.makeup_tracking (makeup_exam_id);
 
 create table public.exam_tracking (
   id uuid primary key default gen_random_uuid(),
@@ -627,6 +640,25 @@ create trigger trg_assignments_validate_teaching_mode
   before insert or update on public.teacher_assignments
   for each row execute function public.assignments_validate_teaching_mode();
 
+create or replace function public.teachers_validate_year_scope()
+returns trigger language plpgsql as $$
+begin
+  if exists (
+    select 1 from public.teacher_assignments ta
+    where ta.teacher_id = new.id
+      and ta.academic_year_id <> new.academic_year_id
+      and ta.deleted_at is null
+  ) then
+    raise exception 'teacher has assignments in another school year';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_teachers_validate_year
+  before update of academic_year_id on public.teachers
+  for each row execute function public.teachers_validate_year_scope();
+
 -- ממלא academic_year_id כשהאפליקציה לא שולחת (מעקב, היסטוריה, השלמות)
 create or replace function public.exam_tracking_fill_academic_year()
 returns trigger language plpgsql as $$
@@ -766,6 +798,17 @@ insert into public.grade_level_options (name, grade_levels) values
   ('ג', array['ג']::text[]),
   ('א+ב', array['א', 'ב']::text[])
 on conflict (name) do nothing;
+
+-- משתמש ראשון (אופציונלי): admin / סיסמה admin — אפשר גם ליצור בהתחברות הראשונה
+insert into public.users (username, password_hash, full_name, active)
+select
+  'admin',
+  '$2b$10$Te.XsoCRqDvBk462gYoLC.BCBgUbifAEj4GRpyMBMnhEa8/kt9ole',
+  'מנהלת מערכת',
+  true
+where not exists (
+  select 1 from public.users where username = 'admin' and deleted_at is null
+);
 
 create or replace view public.school_years as
   select

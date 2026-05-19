@@ -1,3 +1,4 @@
+-- ישן (מחזורים) — כלול ב-RUN_FULL. אל תריצי על מסד חדש.
 alter type public.exam_target_type add value if not exists 'psychology';
 
 alter table public.students

@@ -1,3 +1,4 @@
+-- כלול ב-RUN_FULL_DATABASE_RESET.sql | להרצה נפרדת: מסד קיים בלבד
 alter table public.users drop column if exists role;
 alter table public.users add column if not exists deleted_at timestamptz;
 alter table public.users alter column full_name set default '';

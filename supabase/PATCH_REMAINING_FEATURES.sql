@@ -1,3 +1,4 @@
+-- ישן — כלול ב-RUN_FULL. להרצה רק אם חסרים עמודות בודדות במסד ישן:
 alter table public.users drop column if exists role;
 alter table public.users add column if not exists deleted_at timestamptz;
 

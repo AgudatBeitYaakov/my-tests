@@ -1,4 +1,4 @@
--- הרצה בטוחה על מסד קיים (לא מוחק נתונים).
+-- כלול ב-RUN_FULL_DATABASE_RESET.sql | להרצה נפרדת: מסד קיים בלבד
 -- לוקאפ שכבות ליצירת מבחנים (כולל אפשרות «א+ב»).
 
 create table if not exists public.grade_level_options (
