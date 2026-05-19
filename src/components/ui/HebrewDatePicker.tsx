@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  clampHebrewParts,
   formatHebrewDateTraditional,
   gregorianYmdToHebrewParts,
   HEBREW_DAY_OPTIONS,
-  HEBREW_MONTH_OPTIONS,
+  hebrewMonthsForYear,
   hebrewPartsToGregorianYmd,
   hebrewYearOptions,
+  maxHebrewDayInMonth,
   todayHebrewParts,
   type HebrewDateParts,
 } from "@/lib/hebrewDate";
@@ -27,39 +29,44 @@ export function HebrewDatePicker({
   required,
   label = "תאריך (עברי)",
 }: Props) {
-  const initial = useMemo(() => {
-    if (value) {
-      const parsed = gregorianYmdToHebrewParts(value);
-      if (parsed) return parsed;
-    }
-    return todayHebrewParts();
-  }, []);
+  const [parts, setParts] = useState<HebrewDateParts>(() => {
+    const fromValue = value ? gregorianYmdToHebrewParts(value) : null;
+    return clampHebrewParts(fromValue ?? todayHebrewParts());
+  });
 
-  const [day, setDay] = useState(initial.day);
-  const [month, setMonth] = useState(initial.month);
-  const [year, setYear] = useState(initial.year);
-
-  const yearOptions = useMemo(() => hebrewYearOptions(year), [year]);
+  const yearOptions = useMemo(() => hebrewYearOptions(parts.year), [parts.year]);
+  const monthOptions = useMemo(() => hebrewMonthsForYear(parts.year), [parts.year]);
+  const maxDay = useMemo(
+    () => maxHebrewDayInMonth(parts.month, parts.year),
+    [parts.month, parts.year],
+  );
+  const dayOptions = useMemo(
+    () => HEBREW_DAY_OPTIONS.filter((d) => d.value <= maxDay),
+    [maxDay],
+  );
 
   useEffect(() => {
-    if (!value) return;
-    const parsed = gregorianYmdToHebrewParts(value);
-    if (parsed) {
-      setDay(parsed.day);
-      setMonth(parsed.month);
-      setYear(parsed.year);
+    if (!value) {
+      const today = clampHebrewParts(todayHebrewParts());
+      const ymd = hebrewPartsToGregorianYmd(today);
+      if (ymd) onChange(ymd);
+      return;
     }
-  }, [value]);
+    const parsed = gregorianYmdToHebrewParts(value);
+    if (parsed) setParts(clampHebrewParts(parsed));
+  }, [value, onChange]);
 
   const preview = useMemo(() => {
-    const ymd = hebrewPartsToGregorianYmd({ day, month, year });
+    const ymd = hebrewPartsToGregorianYmd(parts);
     if (!ymd) return null;
     const d = new Date(`${ymd}T12:00:00`);
     return formatHebrewDateTraditional(d);
-  }, [day, month, year]);
+  }, [parts]);
 
-  function emit(parts: HebrewDateParts) {
-    const ymd = hebrewPartsToGregorianYmd(parts);
+  function apply(next: HebrewDateParts) {
+    const clamped = clampHebrewParts(next);
+    setParts(clamped);
+    const ymd = hebrewPartsToGregorianYmd(clamped);
     if (ymd) onChange(ymd);
   }
 
@@ -74,15 +81,11 @@ export function HebrewDatePicker({
           יום
           <select
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm"
-            value={day}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              setDay(next);
-              emit({ day: next, month, year });
-            }}
+            value={parts.day}
+            onChange={(e) => apply({ ...parts, day: Number(e.target.value) })}
             required={required}
           >
-            {HEBREW_DAY_OPTIONS.map((d) => (
+            {dayOptions.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
@@ -93,15 +96,11 @@ export function HebrewDatePicker({
           חודש
           <select
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm"
-            value={month}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              setMonth(next);
-              emit({ day, month: next, year });
-            }}
+            value={parts.month}
+            onChange={(e) => apply({ ...parts, month: Number(e.target.value) })}
             required={required}
           >
-            {HEBREW_MONTH_OPTIONS.map((m) => (
+            {monthOptions.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
               </option>
@@ -112,12 +111,8 @@ export function HebrewDatePicker({
           שנה
           <select
             className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm"
-            value={year}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              setYear(next);
-              emit({ day, month, year: next });
-            }}
+            value={parts.year}
+            onChange={(e) => apply({ ...parts, year: Number(e.target.value) })}
             required={required}
           >
             {yearOptions.map((y) => (
@@ -131,7 +126,7 @@ export function HebrewDatePicker({
       {preview ? (
         <p className="mt-2 text-sm text-zinc-700">{preview}</p>
       ) : (
-        <p className="mt-2 text-xs text-amber-800">תאריך עברי לא תקין</p>
+        <p className="mt-2 text-xs text-amber-800">תאריך עברי לא תקין — בחרי יום/חודש/שנה אחרים</p>
       )}
     </fieldset>
   );

@@ -1,6 +1,6 @@
 import type { EventInput } from "@fullcalendar/core";
 import type { CalendarExamProps } from "@/lib/calendar/types";
-import { formatHebrewDateTraditional } from "@/lib/hebrewDate";
+import { formatHebrewDateFromYmd, formatHebrewDateTraditional } from "@/lib/hebrewDate";
 
 export function eventStartYmd(ev: EventInput): string {
   const s = ev.start;
@@ -36,11 +36,7 @@ export function formatGregorianDateLong(ymd: string): string {
   });
 }
 
-export function formatHebrewDateFromYmd(ymd: string): string {
-  const d = parseLocalYmd(ymd);
-  if (!d) return "";
-  return formatHebrewDateTraditional(d);
-}
+export { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 
 export type ScheduleDayGroup = {
   date: string;

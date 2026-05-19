@@ -62,11 +62,12 @@ export type TeacherAssignment = {
   subject: string;
   lesson_name?: string | null;
   assignment_category: AssignmentCategory;
-  grade_level: GradeLevel;
-  class_id: string | null;
-  specialization_id: string | null;
-  track_id: string | null;
+  grade_levels: GradeLevel[];
+  class_ids: string[];
+  track_ids: string[];
+  specialization_ids: string[];
   psychology_enabled: boolean;
+  applies_to_all_in_grade: boolean;
   teaching_mode?: TeachingMode | null;
   teachers?: Teacher | null;
 };
@@ -78,11 +79,12 @@ export type Exam = {
   subject: string;
   exam_date: string;
   assignment_category: AssignmentCategory;
-  class_id: string | null;
-  specialization_id: string | null;
-  track_id: string | null;
+  grade_levels: GradeLevel[];
+  class_ids: string[];
+  track_ids: string[];
+  specialization_ids: string[];
   psychology_enabled: boolean;
-  grade_level: GradeLevel;
+  applies_to_all_in_grade: boolean;
   created_at: string;
 };
 

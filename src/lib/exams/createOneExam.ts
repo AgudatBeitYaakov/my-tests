@@ -1,18 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { writeAudit } from "@/lib/audit/log";
-import { validateAssignmentWithCategory } from "@/lib/assignments/target";
-import type { AssignmentCategory } from "@/lib/types/db";
 import {
-  assertTeacherAssignmentMatchesExam,
-  fetchStudentIdsForTarget,
-  isTeachingTrackId,
-  targetColumnsFromAssignment,
-} from "@/lib/exams/logic";
+  fetchStudentIdsForMultiTarget,
+  rowToMultiTarget,
+  validateMultiTarget,
+} from "@/lib/assignments/multiTarget";
+import { isTeachingTrackId } from "@/lib/exams/logic";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { buildExamStudentRows } from "@/lib/exams/snapshots";
-import { assertNoDuplicateExam } from "@/lib/validations/exams";
-import type { GradeLevel, TeachingTrackType } from "@/lib/types/db";
+import type { AssignmentCategory, TeachingTrackType } from "@/lib/types/db";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
+import { notDeleted } from "@/lib/db/softDelete";
 
 export type CreateOneExamParams = {
   supabase: SupabaseClient;
@@ -21,7 +19,6 @@ export type CreateOneExamParams = {
   teacherId: string;
   subject: string;
   examDate: string;
-  gradeLevel: GradeLevel;
   assignmentId: string;
   teachingTrackType: TeachingTrackType | null;
   auditUserId: string | null;
@@ -37,7 +34,6 @@ export async function createOneExam(
     teacherId,
     subject,
     examDate,
-    gradeLevel,
     assignmentId,
     teachingTrackType: teachingTrackTypeIn,
     auditUserId,
@@ -46,7 +42,7 @@ export async function createOneExam(
   const { data: ta } = await supabase
     .from("teacher_assignments")
     .select(
-      "id, academic_year_id, grade_level, teacher_id, subject, assignment_category, class_id, specialization_id, track_id, psychology_enabled, teaching_mode, lesson_name",
+      "id, academic_year_id, grade_levels, teacher_id, subject, assignment_category, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, teaching_mode, lesson_name",
     )
     .eq("id", assignmentId)
     .maybeSingle();
@@ -55,37 +51,24 @@ export async function createOneExam(
   if (ta.academic_year_id !== academicYearId) {
     return { error: "שיבוץ לא שייך לשנה הנוכחית" };
   }
-  if (ta.grade_level !== gradeLevel) {
-    return { error: `שיבוץ לא תואם לשכבה ${gradeLevel}` };
-  }
   if (ta.teacher_id !== teacherId || ta.subject !== subject) {
     return { error: "שיבוץ לא תואם למורה/מקצוע" };
   }
 
-  const examTarget = targetColumnsFromAssignment(ta);
+  const multiTarget = rowToMultiTarget(ta);
   const examCategory = ta.assignment_category as AssignmentCategory;
-  const scope = { academic_year_id: academicYearId, grade_level: gradeLevel };
 
-  const targetErr = validateAssignmentWithCategory(examCategory, examTarget);
+  const targetErr = validateMultiTarget(examCategory, multiTarget);
   if (targetErr) return { error: targetErr };
 
-  const dup = await assertNoDuplicateExam(supabase, {
-    gradeLevel,
-    teacherId,
-    subject,
-    target: examTarget,
-    examDate,
-  });
-  if (!dup.ok) return { error: dup.error ?? "מבחן כפול" };
-
-  const check = await assertTeacherAssignmentMatchesExam(
-    supabase,
-    teacherId,
-    subject,
-    examTarget,
-    scope,
-  );
-  if (!check.ok) return { error: check.error ?? "שיבוץ לא תואם" };
+  const dup = await notDeleted(supabase.from("exams").select("id"))
+    .eq("teacher_assignment_id", assignmentId)
+    .eq("exam_date", examDate)
+    .limit(1);
+  if (dup.error) return { error: dup.error.message };
+  if (dup.data?.length) {
+    return { error: "כבר קיים מבחן לאותו שיבוץ באותו תאריך" };
+  }
 
   let teaching_track_type = teachingTrackTypeIn;
   const assignmentTeachingMode = (ta.teaching_mode as "full" | "short" | null) ?? null;
@@ -93,8 +76,8 @@ export async function createOneExam(
     teaching_track_type = assignmentTeachingMode;
   }
 
-  if (examTarget.track_id) {
-    const teachingTrack = await isTeachingTrackId(supabase, examTarget.track_id);
+  if (multiTarget.track_ids.length) {
+    const teachingTrack = await isTeachingTrackId(supabase, multiTarget.track_ids[0]);
     if (teachingTrack && !teaching_track_type) {
       return { error: "במסלול הוראה — בחרי סוג הוראה (מלא / מקוצר)" };
     }
@@ -103,15 +86,15 @@ export async function createOneExam(
     teaching_track_type = null;
   }
 
-  const { ids: studentIds, error: stErr } = await fetchStudentIdsForTarget(
+  const { ids: studentIds, error: stErr } = await fetchStudentIdsForMultiTarget(
     supabase,
-    examTarget,
-    scope,
+    multiTarget,
+    { academic_year_id: academicYearId },
     { teachingTrackType: teaching_track_type, category: examCategory },
   );
   if (stErr) return { error: stErr };
   if (!studentIds.length) {
-    return { error: "לא נמצאו תלמידות לפי היעד והשכבה" };
+    return { error: "לא נמצאו תלמידות לפי היעד והשכבות" };
   }
 
   const insertRow: Record<string, unknown> = {
@@ -120,11 +103,12 @@ export async function createOneExam(
     subject,
     exam_date: examDate,
     assignment_category: examCategory,
-    class_id: examTarget.class_id,
-    specialization_id: examTarget.specialization_id,
-    track_id: examTarget.track_id,
-    psychology_enabled: examTarget.psychology_enabled,
-    grade_level: gradeLevel,
+    grade_levels: multiTarget.grade_levels,
+    class_ids: multiTarget.class_ids,
+    track_ids: multiTarget.track_ids,
+    specialization_ids: multiTarget.specialization_ids,
+    psychology_enabled: multiTarget.psychology_enabled,
+    applies_to_all_in_grade: multiTarget.applies_to_all_in_grade,
     teacher_assignment_id: assignmentId,
   };
   if (teaching_track_type) insertRow.teaching_track_type = teaching_track_type;
@@ -137,6 +121,7 @@ export async function createOneExam(
   const { error: trErr } = await supabase.from("exam_tracking").insert({
     exam_id: examId,
     teacher_id: teacherId,
+    academic_year_id: academicYearId,
   });
   if (trErr) {
     await supabase.from("exams").delete().eq("id", examId);
@@ -150,14 +135,17 @@ export async function createOneExam(
     .single();
   const teacherName = teacherEmbedDisplayName(teacherRow);
 
-  const targetLabels = await resolveExamTargetLabels(supabase, [{ id: examId, ...examTarget }]);
+  const targetLabels = await resolveExamTargetLabels(supabase, [
+    { id: examId, ...multiTarget },
+  ]);
 
+  const primaryGrade = multiTarget.grade_levels[0] ?? "א";
   const rows = await buildExamStudentRows(supabase, {
     examId,
     studentIds,
     teacherName,
     subject,
-    gradeLevel,
+    gradeLevel: primaryGrade,
     academicYearName,
     targetName: targetLabels[examId] ?? null,
   });
@@ -178,8 +166,7 @@ export async function createOneExam(
       teacher_id: teacherId,
       subject,
       exam_date: examDate,
-      ...examTarget,
-      grade_level: gradeLevel,
+      ...multiTarget,
       teacher_assignment_id: assignmentId,
     },
   });

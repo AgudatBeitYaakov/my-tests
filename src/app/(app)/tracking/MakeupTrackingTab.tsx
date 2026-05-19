@@ -6,6 +6,7 @@ import { useAcademicYear, withYearQuery } from "@/components/academicYears/Acade
 import { ListDataCard, ListTableToolbar } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 
 const fetcher = async (url: string) => {
   const r = await fetch(url);
@@ -184,7 +185,7 @@ export function MakeupTrackingTab() {
                 <TableCell>{g.teacher_name ?? "—"}</TableCell>
                 <TableCell>{g.subject}</TableCell>
                 <TableCell>{g.grade_level ?? "—"}</TableCell>
-                <TableCell>{g.exam_date}</TableCell>
+                <TableCell>{formatHebrewDateFromYmd(g.exam_date)}</TableCell>
                 <TableCell>
                   {g.open_count}/{g.count}
                 </TableCell>

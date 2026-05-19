@@ -2,11 +2,13 @@ import { parseGradeLevel } from "@/lib/academicYears/labels";
 import type { GradeLevel } from "@/lib/academicYears/types";
 import {
   assignmentImportKey,
-  normalizeTargetInput,
-  parseAssignmentCategory,
-  validateAssignmentWithCategory,
-  type AssignmentTargetColumns,
-} from "@/lib/assignments/target";
+  filterGradeLevels,
+  normalizeMultiTargetInput,
+  validateMultiTarget,
+  type AssignmentMultiSpec,
+  type AssignmentMultiTarget,
+} from "@/lib/assignments/multiTarget";
+import { parseAssignmentCategory } from "@/lib/assignments/target";
 import type { AssignmentCategory } from "@/lib/types/db";
 import { ASSIGNMENT_EXCEL_HEADERS } from "@/lib/assignments/excelTemplate";
 import {
@@ -43,15 +45,24 @@ export type ParsedAssignmentRow = {
 export type ValidatedAssignmentRow = ParsedAssignmentRow & {
   rowNumber: number;
   errors: string[];
-  resolved?: {
-    teacher_id: string;
-    subject: string;
-    lesson_name: string | null;
-    grade_level: GradeLevel;
-    assignment_category: AssignmentCategory;
-    teaching_mode: TeachingMode | null;
-  } & AssignmentTargetColumns;
+  resolved?: AssignmentMultiSpec;
 };
+
+function splitTargetCell(raw: string): string[] {
+  return raw
+    .split(/[,+]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseGradeLevelsCell(raw: string): GradeLevel[] {
+  const out: GradeLevel[] = [];
+  for (const part of splitTargetCell(raw)) {
+    const g = parseGradeLevel(part);
+    if (g && !out.includes(g)) out.push(g);
+  }
+  return out;
+}
 
 export const ASSIGNMENT_FIELD_ALIASES: Record<
   keyof Omit<ParsedAssignmentRow, "rowNumber">,
@@ -229,49 +240,51 @@ function resolveTeacherId(
 function targetFromRow(
   r: ParsedAssignmentRow,
   category: AssignmentCategory,
+  gradeLevels: GradeLevel[],
   classByName: Map<string, string>,
   specByName: Map<string, string>,
   trackByName: Map<string, string>,
-): { target: AssignmentTargetColumns; errors: string[] } {
+): { target: AssignmentMultiTarget; errors: string[] } {
   const errors: string[] = [];
-  const className = r.class_name.trim();
-  const specName = r.specialization_name.trim();
-  const trackName = r.track_name.trim();
   const psych = parsePsychologyCell(r.psychology_raw);
 
-  let class_id: string | null = null;
-  let specialization_id: string | null = null;
-  let track_id: string | null = null;
-
-  if (className) {
-    class_id = classByName.get(className) ?? null;
-    if (!class_id) errors.push(`כיתה "${className}" לא קיימת בלוקאפים`);
-  }
-  if (specName) {
-    specialization_id = specByName.get(specName) ?? null;
-    if (!specialization_id) errors.push(`התמחות "${specName}" לא קיימת בלוקאפים`);
-  }
-  if (trackName) {
-    track_id = trackByName.get(trackName) ?? null;
-    if (!track_id) errors.push(`מסלול "${trackName}" לא קיים בלוקאפים`);
+  const classNames = splitTargetCell(r.class_name);
+  const applies_to_all_in_grade = classNames.some((n) => /כל\s*השכבה/i.test(n));
+  const class_ids: string[] = [];
+  if (!applies_to_all_in_grade) {
+    for (const name of classNames) {
+      if (/כל\s*השכבה/i.test(name)) continue;
+      const id = classByName.get(name);
+      if (!id) errors.push(`כיתה "${name}" לא קיימת בלוקאפים`);
+      else if (!class_ids.includes(id)) class_ids.push(id);
+    }
   }
 
-  const target = normalizeTargetInput({
-    class_id,
-    specialization_id,
-    track_id,
+  const specialization_ids: string[] = [];
+  for (const name of splitTargetCell(r.specialization_name)) {
+    const id = specByName.get(name);
+    if (!id) errors.push(`התמחות "${name}" לא קיימת בלוקאפים`);
+    else if (!specialization_ids.includes(id)) specialization_ids.push(id);
+  }
+
+  const track_ids: string[] = [];
+  for (const name of splitTargetCell(r.track_name)) {
+    const id = trackByName.get(name);
+    if (!id) errors.push(`מסלול "${name}" לא קיים בלוקאפים`);
+    else if (!track_ids.includes(id)) track_ids.push(id);
+  }
+
+  const target = normalizeMultiTargetInput({
+    grade_levels: gradeLevels,
+    class_ids,
+    track_ids,
+    specialization_ids,
     psychology_enabled: psych,
+    applies_to_all_in_grade,
   });
 
-  const targetErr = validateAssignmentWithCategory(category, target);
+  const targetErr = validateMultiTarget(category, target);
   if (targetErr) errors.push(targetErr);
-
-  if (category === "חובה" && !className && !trackName && !psych && !errors.length) {
-    errors.push("בשיבוץ חובה — מלאי כיתה, מסלול או פסיכולוגיה");
-  }
-  if (category === "התמחות" && !specName && !errors.length) {
-    errors.push("בשיבוץ התמחות — מלאי התמחות");
-  }
 
   return { target, errors };
 }
@@ -308,20 +321,30 @@ export function validateAssignmentImportRows(
     );
   }
 
-    const grade_level = parseGradeLevel(r.grade_level);
-    if (!grade_level) errors.push("שכבה לא תקינה (א/ב/ג)");
+    const grade_levels = parseGradeLevelsCell(r.grade_level);
+    if (!grade_levels.length) errors.push("שכבה לא תקינה (א/ב/ג — אפשר כמה מופרדות בפסיק)");
 
     const { target, errors: targetErrors } = category
-      ? targetFromRow(r, category, maps.classByName, maps.specByName, maps.trackByName)
-      : { target: normalizeTargetInput({}), errors: [] as string[] };
+      ? targetFromRow(
+          r,
+          category,
+          grade_levels,
+          maps.classByName,
+          maps.specByName,
+          maps.trackByName,
+        )
+      : {
+          target: normalizeMultiTargetInput({ grade_levels }),
+          errors: [] as string[],
+        };
     errors.push(...targetErrors);
 
     let teaching_mode: TeachingMode | null = null;
     if (r.teaching_mode_raw.trim()) {
-      if (!target.track_id) {
-        errors.push("סוג הוראה מותר רק כשמולא מסלול");
+      if (target.track_ids.length !== 1) {
+        errors.push("סוג הוראה מותר רק כשמולא מסלול אחד");
       } else {
-        const trackName = maps.trackNameById.get(target.track_id) ?? "";
+        const trackName = maps.trackNameById.get(target.track_ids[0]) ?? "";
         if (!isTeachingTrackName(trackName)) {
           errors.push("סוג הוראה מותר רק במסלול «הוראה»");
         } else {
@@ -332,15 +355,15 @@ export function validateAssignmentImportRows(
     }
 
     const resolved =
-      errors.length === 0 && teacher.id && grade_level && category && !subjectLesson.error
+      errors.length === 0 && teacher.id && grade_levels.length && category && !subjectLesson.error
         ? {
             teacher_id: teacher.id,
             subject: subjectLesson.subject,
             lesson_name: subjectLesson.lesson_name,
-            grade_level,
             assignment_category: category,
-            ...target,
             teaching_mode,
+            ...target,
+            grade_levels: filterGradeLevels(grade_levels),
           }
         : undefined;
 

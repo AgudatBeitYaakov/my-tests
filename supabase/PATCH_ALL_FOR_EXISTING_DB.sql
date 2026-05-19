@@ -303,4 +303,7 @@ where not exists (
   select 1 from public.users where username = 'admin' and deleted_at is null
 );
 
+-- ─── PATCH_ASSIGNMENT_MULTI_TARGET (שיבוץ רב-יעדי בשורה אחת) ─────────────────
+-- הריצי לפני notify: supabase/PATCH_ASSIGNMENT_MULTI_TARGET.sql (בנפרד או אחרי קובץ זה)
+
 notify pgrst, 'reload schema';

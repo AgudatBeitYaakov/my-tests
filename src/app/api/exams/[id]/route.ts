@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rowToMultiTarget } from "@/lib/assignments/multiTarget";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -17,14 +18,10 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 
   if (eErr || !exam) return NextResponse.json({ error: "מבחן לא נמצא" }, { status: 404 });
 
-  const row = exam as {
-    id: string;
-    class_id: string | null;
-    specialization_id: string | null;
-    track_id: string | null;
-    psychology_enabled: boolean;
-  };
-  const labels = await resolveExamTargetLabels(supabase, [row]);
+  const row = exam as { id: string };
+  const labels = await resolveExamTargetLabels(supabase, [
+    { id: row.id, ...rowToMultiTarget(exam) },
+  ]);
   const examEnriched = { ...exam, target_label: labels[row.id] ?? "—" };
 
   const { data: lines, error: lErr } = await supabase

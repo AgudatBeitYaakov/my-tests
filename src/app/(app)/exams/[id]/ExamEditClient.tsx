@@ -12,6 +12,7 @@ import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { pickLookupName } from "@/lib/lookups/display";
 import { psychologyLabel } from "@/lib/students/display";
 import { teachingTrackTypeLabel } from "@/lib/students/fields";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import type { ExamStudentStatus, Teacher } from "@/lib/types/db";
 
@@ -119,7 +120,7 @@ export function ExamEditClient({ id }: { id: string }) {
         <div>
           <h1 className="text-2xl font-semibold">עדכון מבחן</h1>
           <p className="mt-1 text-sm text-zinc-600">
-            {e.subject} · {e.exam_date} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
+            {e.subject} · {formatHebrewDateFromYmd(e.exam_date)} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
             {e.target_label ?? "—"}
           </p>
         </div>

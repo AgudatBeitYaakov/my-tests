@@ -8,6 +8,7 @@ import { NotesButton } from "@/components/ui/NotesButton";
 import { PrintButton } from "@/components/PrintButton";
 import { Spinner } from "@/components/ui/Spinner";
 import { StudentProfileGrid } from "@/components/students/StudentProfileGrid";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import type { ExamStudentStatus, MakeupExamStatus, Student } from "@/lib/types/db";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
@@ -124,7 +125,8 @@ export function StudentDetailClient({ id }: { id: string }) {
                   <div>
                     <div className="font-medium">{row.exam?.subject ?? "מבחן"}</div>
                     <div className="text-xs text-zinc-500">
-                      {row.exam?.exam_date} {row.exam?.teacher_name ? `· ${row.exam.teacher_name}` : ""}
+                      {row.exam?.exam_date ? formatHebrewDateFromYmd(row.exam.exam_date) : ""}
+                      {row.exam?.teacher_name ? ` · ${row.exam.teacher_name}` : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -151,7 +153,9 @@ export function StudentDetailClient({ id }: { id: string }) {
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                   <div>
                     <div className="font-medium">{m.exam?.subject ?? "מבחן"}</div>
-                    <div className="text-xs text-zinc-500">{m.exam?.exam_date ?? ""}</div>
+                    <div className="text-xs text-zinc-500">
+                      {m.exam?.exam_date ? formatHebrewDateFromYmd(m.exam.exam_date) : ""}
+                    </div>
                   </div>
                   <MakeupStatusBadge status={m.status} />
                 </li>

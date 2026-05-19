@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatGradeLevelsLabel, rowToMultiTarget } from "@/lib/assignments/multiTarget";
 import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import {
   backfillMakeupTrackingFromMakeups,
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
 
   const { data: exams, error: examsErr } = await supabase
     .from("exams")
-    .select(`id, subject, exam_date, teacher_id, grade_level, ${TEACHER_EMBED_IN_EXAM}`)
+    .select(`id, subject, exam_date, teacher_id, grade_levels, ${TEACHER_EMBED_IN_EXAM}`)
     .in("id", examIds)
     .eq("academic_year_id", scope.year.id);
 
@@ -64,16 +65,17 @@ export async function GET(request: Request) {
         subject: string;
         exam_date: string;
         teacher_id: string;
-        grade_level: string;
+        grade_levels: string[];
         teachers: unknown;
       };
+      const mt = rowToMultiTarget(raw);
       return [
         raw.id,
         {
           subject: raw.subject,
           exam_date: raw.exam_date,
           teacher_id: raw.teacher_id,
-          grade_level: raw.grade_level,
+          grade_level: formatGradeLevelsLabel(mt.grade_levels),
           teacher_name:
             teacherEmbedDisplayName(
               raw.teachers as Parameters<typeof teacherEmbedDisplayName>[0],

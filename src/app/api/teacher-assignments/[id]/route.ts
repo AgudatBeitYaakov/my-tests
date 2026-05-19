@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import {
-  normalizeTargetInput,
-  parseAssignmentCategory,
-  validateAssignmentWithCategory,
-} from "@/lib/assignments/target";
-import { parseGradeLevel } from "@/lib/academicYears/labels";
+  computeTargetsFingerprint,
+  normalizeMultiTargetInput,
+  rowToMultiTarget,
+  validateMultiTarget,
+} from "@/lib/assignments/multiTarget";
+import { parseAssignmentCategory } from "@/lib/assignments/target";
+import { filterGradeLevels } from "@/lib/gradeLevels/options";
 import {
   readOnlyResponse,
   resolveAcademicYearScope,
@@ -29,11 +31,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const { data: existing, error: loadErr } = await notDeleted(
-    supabase
-      .from("teacher_assignments")
-      .select(
-        "id, subject, lesson_name, assignment_category, class_id, specialization_id, track_id, psychology_enabled",
-      ),
+    supabase.from("teacher_assignments").select("*"),
   )
     .eq("id", id)
     .eq("academic_year_id", scope.year.id)
@@ -45,12 +43,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     teacher_id?: string;
     subject?: string;
     lesson_name?: string | null;
-    grade_level?: string;
+    grade_levels?: string[];
     assignment_category?: string;
-    class_id?: string | null;
-    specialization_id?: string | null;
-    track_id?: string | null;
+    class_ids?: string[];
+    track_ids?: string[];
+    specialization_ids?: string[];
     psychology_enabled?: boolean;
+    applies_to_all_in_grade?: boolean;
     teaching_mode?: string | null;
   };
 
@@ -71,17 +70,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     patch.subject = subjectLesson.subject;
     patch.lesson_name = subjectLesson.lesson_name;
   }
-  if (body.grade_level !== undefined) {
-    const gl = parseGradeLevel(body.grade_level);
-    if (!gl) return NextResponse.json({ error: "שכבה לא תקינה" }, { status: 400 });
-    patch.grade_level = gl;
-  }
 
   let category = existing.assignment_category as AssignmentCategory;
-  const categoryChanged =
-    body.assignment_category !== undefined &&
-    parseAssignmentCategory(body.assignment_category) !== existing.assignment_category;
-
   if (body.assignment_category !== undefined) {
     const parsed = parseAssignmentCategory(body.assignment_category);
     if (!parsed) return NextResponse.json({ error: "סוג שיבוץ לא תקין" }, { status: 400 });
@@ -89,46 +79,42 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     patch.assignment_category = category;
   }
 
-  const targetTouched =
-    categoryChanged ||
-    body.class_id !== undefined ||
-    body.specialization_id !== undefined ||
-    body.track_id !== undefined ||
-    body.psychology_enabled !== undefined;
+  const current = rowToMultiTarget(existing);
+  const nextTarget = normalizeMultiTargetInput({
+    grade_levels:
+      body.grade_levels !== undefined
+        ? filterGradeLevels(body.grade_levels)
+        : current.grade_levels,
+    class_ids: body.class_ids !== undefined ? body.class_ids : current.class_ids,
+    track_ids: body.track_ids !== undefined ? body.track_ids : current.track_ids,
+    specialization_ids:
+      body.specialization_ids !== undefined
+        ? body.specialization_ids
+        : current.specialization_ids,
+    psychology_enabled:
+      body.psychology_enabled !== undefined
+        ? body.psychology_enabled
+        : current.psychology_enabled,
+    applies_to_all_in_grade:
+      body.applies_to_all_in_grade !== undefined
+        ? body.applies_to_all_in_grade
+        : current.applies_to_all_in_grade,
+  });
 
-  if (targetTouched) {
-    let class_id = body.class_id !== undefined ? body.class_id : existing.class_id;
-    let specialization_id =
-      body.specialization_id !== undefined ? body.specialization_id : existing.specialization_id;
-    let track_id = body.track_id !== undefined ? body.track_id : existing.track_id;
-    let psychology_enabled =
-      body.psychology_enabled !== undefined ? body.psychology_enabled : existing.psychology_enabled;
+  const targetErr = validateMultiTarget(category, nextTarget);
+  if (targetErr) return NextResponse.json({ error: targetErr }, { status: 400 });
 
-    if (categoryChanged) {
-      class_id = body.class_id !== undefined ? body.class_id : null;
-      specialization_id = body.specialization_id !== undefined ? body.specialization_id : null;
-      track_id = body.track_id !== undefined ? body.track_id : null;
-      psychology_enabled =
-        body.psychology_enabled !== undefined ? body.psychology_enabled : false;
-    }
-
-    const target = normalizeTargetInput({
-      class_id,
-      specialization_id,
-      track_id,
-      psychology_enabled,
-    });
-    const targetErr = validateAssignmentWithCategory(category, target);
-    if (targetErr) return NextResponse.json({ error: targetErr }, { status: 400 });
-    patch.class_id = target.class_id;
-    patch.specialization_id = target.specialization_id;
-    patch.track_id = target.track_id;
-    patch.psychology_enabled = target.psychology_enabled;
-  }
+  patch.grade_levels = nextTarget.grade_levels;
+  patch.class_ids = nextTarget.class_ids;
+  patch.track_ids = nextTarget.track_ids;
+  patch.specialization_ids = nextTarget.specialization_ids;
+  patch.psychology_enabled = nextTarget.psychology_enabled;
+  patch.applies_to_all_in_grade = nextTarget.applies_to_all_in_grade;
+  patch.targets_fingerprint = computeTargetsFingerprint(nextTarget);
 
   const trackIdForTeaching =
-    category === "חובה"
-      ? ((patch.track_id as string | null | undefined) ?? existing.track_id ?? null)
+    category === "חובה" && nextTarget.track_ids.length === 1
+      ? nextTarget.track_ids[0]
       : null;
 
   if (body.teaching_mode !== undefined) {
@@ -141,10 +127,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: teaching.error }, { status: 400 });
     }
     patch.teaching_mode = teaching.teaching_mode;
-  }
-
-  if (!Object.keys(patch).length) {
-    return NextResponse.json({ error: "אין שדות לעדכון" }, { status: 400 });
   }
 
   const { data, error } = await supabase

@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import type { Teacher } from "@/lib/types/db";
 
@@ -96,7 +97,7 @@ export function ExamsListClient() {
                 <TableRow key={e.id}>
                   <TableCell>{teacherEmbedDisplayName(e.teachers as Teacher | null)}</TableCell>
                   <TableCell className="font-medium text-slate-900 dark:text-zinc-100">{e.subject}</TableCell>
-                  <TableCell>{e.exam_date}</TableCell>
+                  <TableCell>{formatHebrewDateFromYmd(e.exam_date)}</TableCell>
                   <TableCell className="text-slate-600 dark:text-zinc-300">
                     {e.target_label ?? "—"}
                   </TableCell>

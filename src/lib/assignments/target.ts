@@ -38,6 +38,28 @@ export function normalizeTargetInput(raw: AssignmentTargetInput): AssignmentTarg
   return { class_id, specialization_id, track_id, psychology_enabled };
 }
 
+export function normalizeClassIds(
+  class_id?: string | null,
+  class_ids?: string[] | null,
+): string[] {
+  const fromArray = (class_ids ?? []).map((id) => id.trim()).filter(Boolean);
+  const fromSingle = class_id?.trim() ? [class_id.trim()] : [];
+  return [...new Set([...fromArray, ...fromSingle])];
+}
+
+export function validateMultiClassSelection(
+  category: AssignmentCategory,
+  classIds: string[],
+  target: AssignmentTargetColumns,
+): string | null {
+  if (classIds.length <= 1) return null;
+  if (category !== "חובה") return "ניתן לבחור כמה כיתות רק בשיבוץ חובה";
+  if (target.track_id || target.psychology_enabled || target.specialization_id) {
+    return "בכמה כיתות — בחרי רק כיתות, בלי מסלול או פסיכולוגיה";
+  }
+  return null;
+}
+
 export function countMandatoryTargets(t: AssignmentTargetColumns): number {
   let n = 0;
   if (t.class_id) n += 1;

@@ -8,6 +8,7 @@ import { ListPageHeader } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import { apiFetcher } from "@/lib/api/fetcher";
 
 type Item = {
@@ -208,7 +209,9 @@ export function DashboardClient() {
                   className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-2 py-3 first:pt-0 hover:bg-zinc-50/70 dark:hover:bg-white/5"
                 >
                   <div className="min-w-0">
-                    <div className="font-medium text-zinc-950 dark:text-zinc-50">{it.exam_date}</div>
+                    <div className="font-medium text-zinc-950 dark:text-zinc-50">
+                      {formatHebrewDateFromYmd(it.exam_date)}
+                    </div>
                     <div className="truncate text-sm text-zinc-700 dark:text-zinc-200">
                       {it.subject} · {it.teacher_name}
                     </div>

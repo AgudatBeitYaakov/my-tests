@@ -1,13 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  resolveAssignmentTargetLabels,
-  type AssignmentTargetRow,
-} from "@/lib/assignments/target";
+  resolveMultiTargetLabels,
+  rowToMultiTarget,
+  type AssignmentMultiTargetRow,
+} from "@/lib/assignments/multiTarget";
 
-/** @deprecated Use resolveAssignmentTargetLabels — kept for call-site compatibility */
 export async function resolveExamTargetLabels(
   supabase: SupabaseClient,
-  rows: AssignmentTargetRow[],
+  rows: AssignmentMultiTargetRow[],
 ): Promise<Record<string, string>> {
-  return resolveAssignmentTargetLabels(supabase, rows);
+  const normalized = rows.map((r) => ({
+    id: r.id,
+    ...rowToMultiTarget(r),
+    assignment_category: r.assignment_category,
+  }));
+  return resolveMultiTargetLabels(supabase, normalized);
 }

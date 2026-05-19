@@ -234,14 +234,16 @@ create table public.teacher_assignments (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   teacher_id uuid not null references public.teachers (id) on delete restrict,
-  grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
+  grade_levels text[] not null default '{}',
   subject text not null,
   lesson_name text,
   assignment_category text not null,
-  class_id uuid references public.classes (id) on delete restrict,
-  specialization_id uuid references public.specializations (id) on delete restrict,
-  track_id uuid references public.tracks (id) on delete restrict,
+  class_ids uuid[] not null default '{}',
+  track_ids uuid[] not null default '{}',
+  specialization_ids uuid[] not null default '{}',
   psychology_enabled boolean not null default false,
+  applies_to_all_in_grade boolean not null default false,
+  targets_fingerprint text,
   teaching_mode text,
   created_at timestamptz not null default now(),
   deleted_at timestamptz
@@ -253,42 +255,49 @@ alter table public.teacher_assignments add constraint teacher_assignments_catego
 alter table public.teacher_assignments add constraint teacher_assignments_teaching_mode_check
   check (teaching_mode is null or teaching_mode in ('full', 'short'));
 
-alter table public.teacher_assignments add constraint teacher_assignments_category_target_check
+alter table public.teacher_assignments add constraint teacher_assignments_grade_levels_check
+  check (
+    cardinality(grade_levels) >= 1
+    and grade_levels <@ array['א', 'ב', 'ג']::text[]
+  );
+
+alter table public.teacher_assignments add constraint teacher_assignments_multi_target_check
   check (
     (
       assignment_category = 'התמחות'
-      and specialization_id is not null
-      and class_id is null
-      and track_id is null
+      and cardinality(specialization_ids) >= 1
+      and cardinality(class_ids) = 0
+      and cardinality(track_ids) = 0
       and not psychology_enabled
+      and not applies_to_all_in_grade
     )
     or (
       assignment_category = 'חובה'
-      and specialization_id is null
+      and cardinality(specialization_ids) = 0
       and (
-        (case when class_id is not null then 1 else 0 end) +
-        (case when track_id is not null then 1 else 0 end) +
-        (case when psychology_enabled then 1 else 0 end)
-      ) = 1
+        applies_to_all_in_grade
+        or psychology_enabled
+        or cardinality(class_ids) >= 1
+        or cardinality(track_ids) >= 1
+      )
       and (
-        not psychology_enabled
-        or (class_id is null and track_id is null)
+        not applies_to_all_in_grade
+        or (
+          cardinality(class_ids) = 0
+          and cardinality(track_ids) = 0
+          and not psychology_enabled
+        )
       )
     )
   );
 
-create unique index uq_teacher_assignment on public.teacher_assignments (
+create unique index uq_teacher_assignment_fingerprint on public.teacher_assignments (
   academic_year_id,
   teacher_id,
-  grade_level,
   subject,
   coalesce(lesson_name, ''),
   assignment_category,
-  coalesce(class_id::text, ''),
-  coalesce(specialization_id::text, ''),
-  coalesce(track_id::text, ''),
-  psychology_enabled,
-  coalesce(teaching_mode, '')
+  coalesce(targets_fingerprint, '')
 ) where deleted_at is null;
 
 create index idx_teacher_assignments_category on public.teacher_assignments (assignment_category);
@@ -299,15 +308,16 @@ create table public.exams (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
   teacher_assignment_id uuid not null references public.teacher_assignments (id) on delete restrict,
-  grade_level text not null check (grade_level in ('א', 'ב', 'ג')),
+  grade_levels text[] not null default '{}',
   teacher_id uuid not null references public.teachers (id) on delete restrict,
   subject text not null,
   exam_date date not null,
   assignment_category text not null,
-  class_id uuid references public.classes (id) on delete restrict,
-  specialization_id uuid references public.specializations (id) on delete restrict,
-  track_id uuid references public.tracks (id) on delete restrict,
+  class_ids uuid[] not null default '{}',
+  track_ids uuid[] not null default '{}',
+  specialization_ids uuid[] not null default '{}',
   psychology_enabled boolean not null default false,
+  applies_to_all_in_grade boolean not null default false,
   notes text,
   makeup_locked_at timestamptz,
   teaching_track_type text,
@@ -321,32 +331,38 @@ alter table public.exams add constraint exams_category_check
 alter table public.exams add constraint exams_teaching_track_type_check
   check (teaching_track_type is null or teaching_track_type in ('full', 'short'));
 
-alter table public.exams add constraint exams_category_target_check
+alter table public.exams add constraint exams_grade_levels_check
+  check (
+    cardinality(grade_levels) >= 1
+    and grade_levels <@ array['א', 'ב', 'ג']::text[]
+  );
+
+alter table public.exams add constraint exams_multi_target_check
   check (
     (
       assignment_category = 'התמחות'
-      and specialization_id is not null
-      and class_id is null
-      and track_id is null
+      and cardinality(specialization_ids) >= 1
+      and cardinality(class_ids) = 0
+      and cardinality(track_ids) = 0
       and not psychology_enabled
+      and not applies_to_all_in_grade
     )
     or (
       assignment_category = 'חובה'
-      and specialization_id is null
+      and cardinality(specialization_ids) = 0
       and (
-        (case when class_id is not null then 1 else 0 end) +
-        (case when track_id is not null then 1 else 0 end) +
-        (case when psychology_enabled then 1 else 0 end)
-      ) = 1
-      and (
-        not psychology_enabled
-        or (class_id is null and track_id is null)
+        applies_to_all_in_grade
+        or psychology_enabled
+        or cardinality(class_ids) >= 1
+        or cardinality(track_ids) >= 1
       )
     )
   );
 
-create unique index uq_exams_unique on public.exams (
-  academic_year_id, grade_level, teacher_assignment_id, exam_date
+create unique index uq_exams_assignment_date on public.exams (
+  academic_year_id,
+  teacher_assignment_id,
+  exam_date
 ) where deleted_at is null;
 
 -- ─── PATCH_REMAINING_FEATURES: snapshots, makeup_locked ─────────────────────
@@ -480,49 +496,56 @@ create trigger trg_academic_years_single_active
   after insert or update of is_active on public.academic_years
   for each row execute function public.academic_years_single_active();
 
-create or replace function public.assignments_validate_target()
+create or replace function public.assignments_validate_multi_target()
 returns trigger language plpgsql as $$
+declare
+  cid uuid;
+  tid uuid;
+  sid uuid;
 begin
-  if new.class_id is not null then
+  if tg_op = 'UPDATE' then
+    if new.academic_year_id is distinct from old.academic_year_id then
+      raise exception 'cannot change academic_year_id on assignment';
+    end if;
+  end if;
+
+  foreach cid in array coalesce(new.class_ids, '{}'::uuid[]) loop
     if not exists (
       select 1 from public.classes c
-      where c.id = new.class_id
-        and c.academic_year_id = new.academic_year_id
-        and c.is_active
-        and c.deleted_at is null
+      where c.id = cid and c.academic_year_id = new.academic_year_id
+        and c.is_active and c.deleted_at is null
     ) then
-      raise exception 'class_id invalid, inactive, or wrong school year';
+      raise exception 'class_id % invalid for school year', cid;
     end if;
-  end if;
-  if new.specialization_id is not null then
-    if not exists (
-      select 1 from public.specializations s
-      where s.id = new.specialization_id
-        and s.academic_year_id = new.academic_year_id
-        and s.is_active
-        and s.deleted_at is null
-    ) then
-      raise exception 'specialization_id invalid, inactive, or wrong school year';
-    end if;
-  end if;
-  if new.track_id is not null then
+  end loop;
+
+  foreach tid in array coalesce(new.track_ids, '{}'::uuid[]) loop
     if not exists (
       select 1 from public.tracks t
-      where t.id = new.track_id
-        and t.academic_year_id = new.academic_year_id
-        and t.is_active
-        and t.deleted_at is null
+      where t.id = tid and t.academic_year_id = new.academic_year_id
+        and t.is_active and t.deleted_at is null
     ) then
-      raise exception 'track_id invalid, inactive, or wrong school year';
+      raise exception 'track_id % invalid for school year', tid;
     end if;
-  end if;
+  end loop;
+
+  foreach sid in array coalesce(new.specialization_ids, '{}'::uuid[]) loop
+    if not exists (
+      select 1 from public.specializations s
+      where s.id = sid and s.academic_year_id = new.academic_year_id
+        and s.is_active and s.deleted_at is null
+    ) then
+      raise exception 'specialization_id % invalid for school year', sid;
+    end if;
+  end loop;
+
   return new;
 end;
 $$;
 
-create trigger trg_assignments_validate_target
-  before insert or update of class_id, specialization_id, track_id, psychology_enabled on public.teacher_assignments
-  for each row execute function public.assignments_validate_target();
+create trigger trg_assignments_validate_multi_target
+  before insert or update on public.teacher_assignments
+  for each row execute function public.assignments_validate_multi_target();
 
 create or replace function public.students_validate_teaching_fields()
 returns trigger language plpgsql as $$
@@ -558,49 +581,56 @@ create trigger trg_students_validate_teaching
   before insert or update on public.students
   for each row execute function public.students_validate_teaching_fields();
 
-create or replace function public.exams_validate_target()
+create or replace function public.exams_validate_multi_target()
 returns trigger language plpgsql as $$
+declare
+  cid uuid;
+  tid uuid;
+  sid uuid;
 begin
-  if new.class_id is not null then
+  foreach cid in array coalesce(new.class_ids, '{}'::uuid[]) loop
     if not exists (
       select 1 from public.classes c
-      where c.id = new.class_id and c.academic_year_id = new.academic_year_id
+      where c.id = cid and c.academic_year_id = new.academic_year_id
     ) then
-      raise exception 'exam class_id invalid or wrong school year';
+      raise exception 'exam class_id % invalid for school year', cid;
     end if;
-  end if;
-  if new.specialization_id is not null then
-    if not exists (
-      select 1 from public.specializations s
-      where s.id = new.specialization_id and s.academic_year_id = new.academic_year_id
-    ) then
-      raise exception 'exam specialization_id invalid or wrong school year';
-    end if;
-  end if;
-  if new.track_id is not null then
+  end loop;
+
+  foreach tid in array coalesce(new.track_ids, '{}'::uuid[]) loop
     if not exists (
       select 1 from public.tracks t
-      where t.id = new.track_id and t.academic_year_id = new.academic_year_id
+      where t.id = tid and t.academic_year_id = new.academic_year_id
     ) then
-      raise exception 'exam track_id invalid or wrong school year';
+      raise exception 'exam track_id % invalid for school year', tid;
     end if;
-  end if;
+  end loop;
+
+  foreach sid in array coalesce(new.specialization_ids, '{}'::uuid[]) loop
+    if not exists (
+      select 1 from public.specializations s
+      where s.id = sid and s.academic_year_id = new.academic_year_id
+    ) then
+      raise exception 'exam specialization_id % invalid for school year', sid;
+    end if;
+  end loop;
+
   return new;
 end;
 $$;
 
-create trigger trg_exams_validate_target
-  before insert or update of class_id, specialization_id, track_id, psychology_enabled on public.exams
-  for each row execute function public.exams_validate_target();
+create trigger trg_exams_validate_multi_target
+  before insert or update on public.exams
+  for each row execute function public.exams_validate_multi_target();
 
 create or replace function public.exams_validate_assignment_scope()
 returns trigger language plpgsql as $$
 declare
   a_year_id uuid;
-  a_grade text;
+  a_grades text[];
 begin
-  select ta.academic_year_id, ta.grade_level
-  into a_year_id, a_grade
+  select ta.academic_year_id, ta.grade_levels
+  into a_year_id, a_grades
   from public.teacher_assignments ta
   where ta.id = new.teacher_assignment_id
     and ta.deleted_at is null;
@@ -609,7 +639,7 @@ begin
     raise exception 'teacher_assignment not found or deleted';
   end if;
 
-  if a_year_id <> new.academic_year_id or a_grade <> new.grade_level then
+  if a_year_id <> new.academic_year_id or coalesce(a_grades, '{}') is distinct from coalesce(new.grade_levels, '{}') then
     raise exception 'exam scope must match teacher_assignment';
   end if;
 
@@ -618,7 +648,7 @@ end;
 $$;
 
 create trigger trg_exams_validate_assignment_scope
-  before insert or update of teacher_assignment_id, academic_year_id, grade_level on public.exams
+  before insert or update of teacher_assignment_id, academic_year_id, grade_levels on public.exams
   for each row execute function public.exams_validate_assignment_scope();
 
 create or replace function public.set_updated_at()
@@ -756,10 +786,7 @@ create index idx_students_tz on public.students (tz);
 create index idx_students_full_name on public.students (full_name_generated);
 create index idx_students_deleted on public.students (deleted_at) where deleted_at is null;
 create index idx_students_import_batch on public.students (import_batch_id);
-create index idx_teacher_assignments_grade on public.teacher_assignments (academic_year_id, grade_level);
-create index idx_teacher_assignments_class_id on public.teacher_assignments (class_id) where class_id is not null;
-create index idx_teacher_assignments_specialization_id on public.teacher_assignments (specialization_id) where specialization_id is not null;
-create index idx_teacher_assignments_track_id on public.teacher_assignments (track_id) where track_id is not null;
+create index idx_teacher_assignments_grade_levels on public.teacher_assignments using gin (grade_levels);
 create index idx_exams_academic_year on public.exams (academic_year_id);
 create index idx_exams_exam_date on public.exams (exam_date);
 create index idx_exams_deleted on public.exams (deleted_at) where deleted_at is null;

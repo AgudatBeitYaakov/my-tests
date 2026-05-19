@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { computeTargetsFingerprint } from "@/lib/assignments/multiTarget";
 import {
   assignmentImportKey,
   validateAssignmentImportRows,
@@ -75,17 +76,20 @@ export async function POST(request: Request) {
       continue;
     }
     ctx.existingKeys.add(key);
+    const fingerprint = computeTargetsFingerprint(r.resolved);
     toInsert.push({
       academic_year_id: ctx.academicYearId,
       teacher_id: r.resolved.teacher_id,
       subject: r.resolved.subject,
       lesson_name: r.resolved.lesson_name,
-      grade_level: r.resolved.grade_level,
+      grade_levels: r.resolved.grade_levels,
       assignment_category: r.resolved.assignment_category,
-      class_id: r.resolved.class_id,
-      specialization_id: r.resolved.specialization_id,
-      track_id: r.resolved.track_id,
+      class_ids: r.resolved.class_ids,
+      track_ids: r.resolved.track_ids,
+      specialization_ids: r.resolved.specialization_ids,
       psychology_enabled: r.resolved.psychology_enabled,
+      applies_to_all_in_grade: r.resolved.applies_to_all_in_grade,
+      targets_fingerprint: fingerprint,
       teaching_mode: r.resolved.teaching_mode,
     });
   }

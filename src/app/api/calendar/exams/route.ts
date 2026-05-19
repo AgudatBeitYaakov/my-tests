@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { formatGradeLabel } from "@/lib/academicYears/labels";
 import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import { notDeleted } from "@/lib/db/softDelete";
-import type { GradeLevel } from "@/lib/academicYears/types";
+import {
+  formatGradeLevelsLabel,
+  multiTargetTypeLabel,
+  rowToMultiTarget,
+} from "@/lib/assignments/multiTarget";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
-import { assignmentTargetTypeLabel } from "@/lib/assignments/target";
 import { teacherEmbedDisplayName } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -81,7 +83,9 @@ export async function GET(request: Request) {
   const examsQuery = notDeleted(
     supabase
       .from("exams")
-      .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, teacher_id, grade_level, teachers ( id, first_name, last_name, full_name_generated )"),
+      .select(
+        "id, subject, exam_date, grade_levels, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, assignment_category, teacher_id, teachers ( id, first_name, last_name, full_name_generated )",
+      ),
   )
     .eq("academic_year_id", scope.year.id)
     .gte("exam_date", start)
@@ -95,12 +99,14 @@ export async function GET(request: Request) {
     id: string;
     subject: string;
     exam_date: string;
-    class_id: string | null;
-    specialization_id: string | null;
-    track_id: string | null;
+    grade_levels: string[];
+    class_ids: string[];
+    track_ids: string[];
+    specialization_ids: string[];
     psychology_enabled: boolean;
+    applies_to_all_in_grade: boolean;
+    assignment_category: "חובה" | "התמחות";
     teacher_id: string;
-    grade_level: GradeLevel;
     teachers:
       | { id: string; first_name: string; last_name: string; full_name_generated: string | null }
       | { id: string; first_name: string; last_name: string; full_name_generated: string | null }[]
@@ -112,13 +118,7 @@ export async function GET(request: Request) {
 
   const labels = await resolveExamTargetLabels(
     supabase,
-    exams.map((e) => ({
-      id: e.id,
-      class_id: e.class_id,
-      specialization_id: e.specialization_id,
-      track_id: e.track_id,
-      psychology_enabled: e.psychology_enabled,
-    })),
+    exams.map((e) => ({ id: e.id, ...rowToMultiTarget(e) })),
   );
 
   let countsByExam: Record<string, Counts> = {};
@@ -168,8 +168,8 @@ export async function GET(request: Request) {
   const classDayKey = (date: string, classId: string) => `${date}|${classId}`;
   const classDayCount = new Map<string, number>();
   for (const e of exams) {
-    if (e.class_id) {
-      const k = classDayKey(e.exam_date, e.class_id);
+    for (const classId of e.class_ids ?? []) {
+      const k = classDayKey(e.exam_date, classId);
       classDayCount.set(k, (classDayCount.get(k) ?? 0) + 1);
     }
   }
@@ -187,18 +187,13 @@ export async function GET(request: Request) {
     const tr = trackingByExam[e.id] ?? null;
     const cols = colorsForExam(e.exam_date, c, tr);
     const teacherName = teacherEmbedDisplayName(e.teachers);
-    const gradeLevelName = formatGradeLabel(e.grade_level);
-    const classConflict =
-      Boolean(e.class_id) && (classDayCount.get(classDayKey(e.exam_date, e.class_id!)) ?? 0) > 1;
+    const mt = rowToMultiTarget(e);
+    const gradeLevelName = formatGradeLevelsLabel(mt.grade_levels);
+    const classConflict = (e.class_ids ?? []).some(
+      (classId) => (classDayCount.get(classDayKey(e.exam_date, classId)) ?? 0) > 1,
+    );
     const teacherOverlap = (teacherDayCount.get(`${e.exam_date}|${e.teacher_id}`) ?? 0) > 1;
     const dayLoad = dayExamCount.get(e.exam_date) ?? 0;
-
-    const targetCols = {
-      class_id: e.class_id,
-      specialization_id: e.specialization_id,
-      track_id: e.track_id,
-      psychology_enabled: e.psychology_enabled,
-    };
 
     const shortCounts = c.total ? `${c.took + c.completed}/${c.total}` : "0";
 
@@ -216,7 +211,7 @@ export async function GET(request: Request) {
         examDate: e.exam_date,
         teacherId: e.teacher_id,
         teacherName: teacherName ?? "",
-        targetTypeLabel: assignmentTargetTypeLabel(targetCols),
+        targetTypeLabel: multiTargetTypeLabel(mt, e.assignment_category),
         targetLabel: labels[e.id] ?? "—",
         gradeLevelName,
         counts: c,

@@ -102,11 +102,12 @@ export function hebrewPartsToGregorianYmd(parts: HebrewDateParts): string | null
   const { day, month, year } = parts;
   if (!day || !month || !year || day < 1 || day > 30 || month < 1 || month > 13) return null;
 
-  const approx = year + 3760;
-  const start = new Date(approx - 1, 0, 1);
-  const end = new Date(approx + 1, 11, 31);
+  const approxGreg = year - 3760;
+  const start = new Date(approxGreg - 1, 0, 1, 12, 0, 0, 0);
+  const end = new Date(approxGreg + 1, 11, 31, 12, 0, 0, 0);
   for (let t = start.getTime(); t <= end.getTime(); t += 86_400_000) {
     const d = new Date(t);
+    d.setHours(12, 0, 0, 0);
     const hp = readHebrewParts(d);
     if (hp && hp.day === day && hp.month === month && hp.year === year) {
       const pad = (n: number) => String(n).padStart(2, "0");
@@ -114,6 +115,41 @@ export function hebrewPartsToGregorianYmd(parts: HebrewDateParts): string | null
     }
   }
   return null;
+}
+
+/** מספר הימים בחודש עברי (29/30; אדר ב רק בשנה מעוברת). */
+export function maxHebrewDayInMonth(month: number, year: number): number {
+  for (let d = 30; d >= 1; d--) {
+    if (hebrewPartsToGregorianYmd({ day: d, month, year })) return d;
+  }
+  return 0;
+}
+
+/** חודשים תקפים לשנה עברית (בלי «אדר ב» בשנה שאינה מעוברת). */
+export function hebrewMonthsForYear(year: number) {
+  return HEBREW_MONTH_OPTIONS.filter((m) => maxHebrewDayInMonth(m.value, year) > 0);
+}
+
+export function clampHebrewParts(parts: HebrewDateParts): HebrewDateParts {
+  const months = hebrewMonthsForYear(parts.year);
+  let month = parts.month;
+  if (!months.some((m) => m.value === month)) {
+    month = months[months.length - 1]?.value ?? month;
+  }
+  const maxDay = maxHebrewDayInMonth(month, parts.year);
+  const day = maxDay ? Math.min(Math.max(1, parts.day), maxDay) : parts.day;
+  return { day, month, year: parts.year };
+}
+
+/** תצוגה עברית מתאריך גregoriani YYYY-MM-DD (שמור במסד). */
+export function formatHebrewDateFromYmd(ymd: string): string {
+  const t = ymd.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return ymd;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) return ymd;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+  if (Number.isNaN(d.getTime())) return ymd;
+  return formatHebrewDateTraditional(d) || ymd;
 }
 
 export function todayHebrewParts(): HebrewDateParts {

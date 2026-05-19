@@ -7,7 +7,8 @@ import {
 } from "@/lib/assignments/excelImport";
 import { notDeleted } from "@/lib/db/softDelete";
 import { TEACHER_COLUMNS } from "@/lib/teachers/db";
-import type { AssignmentCategory, GradeLevel, TeachingMode } from "@/lib/types/db";
+import { rowToMultiTarget } from "@/lib/assignments/multiTarget";
+import type { AssignmentCategory, TeachingMode } from "@/lib/types/db";
 
 export type AssignmentImportContext = AssignmentImportMaps & {
   academicYearId: string;
@@ -43,7 +44,7 @@ export async function loadAssignmentImportContext(
     ),
     notDeleted(
       supabase.from("teacher_assignments").select(
-        "teacher_id,grade_level,subject,lesson_name,assignment_category,class_id,specialization_id,track_id,psychology_enabled,teaching_mode",
+        "teacher_id,grade_levels,subject,lesson_name,assignment_category,class_ids,track_ids,specialization_ids,psychology_enabled,applies_to_all_in_grade,teaching_mode",
       ),
     ).eq("academic_year_id", academicYearId),
   ]);
@@ -64,13 +65,9 @@ export async function loadAssignmentImportContext(
         teacher_id: a.teacher_id,
         subject: a.subject.trim(),
         lesson_name: (a.lesson_name as string | null) ?? null,
-        grade_level: a.grade_level as GradeLevel,
-        class_id: a.class_id,
-        specialization_id: a.specialization_id,
-        track_id: a.track_id,
-        psychology_enabled: a.psychology_enabled,
         teaching_mode: (a.teaching_mode as TeachingMode | null) ?? null,
         assignment_category: a.assignment_category as AssignmentCategory,
+        ...rowToMultiTarget(a as Parameters<typeof rowToMultiTarget>[0]),
       }),
     ),
   );

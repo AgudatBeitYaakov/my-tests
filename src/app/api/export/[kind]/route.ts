@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { enrichStudentsWithGrade, formatCohortGradeLabel } from "@/lib/academic/studentGrade";
 import { formatGradeLabel } from "@/lib/academicYears/labels";
+import {
+  formatGradeLevelsLabel,
+  multiTargetTypeLabel,
+  rowToMultiTarget,
+} from "@/lib/assignments/multiTarget";
 import { resolveAcademicYearScope, scopeFromSearchParams } from "@/lib/academicYears/scope";
 import { ASSIGNMENT_WITH_LOOKUPS } from "@/lib/db/assignmentSelect";
 import { notDeleted } from "@/lib/db/softDelete";
@@ -8,7 +13,6 @@ import { asStudentRows, type StudentWithLookupsRow } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
 import { pickLookupName } from "@/lib/lookups/display";
-import { assignmentTargetTypeLabel } from "@/lib/assignments/target";
 import { TEACHER_EMBED_IN_EXAM } from "@/lib/teachers/db";
 import { teacherDisplayName, teacherEmbedDisplayName, teachingModeLabel } from "@/lib/teachers/display";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -60,12 +64,19 @@ type ExamJoin = {
   id: string;
   subject: string;
   exam_date: string;
-  class_id: string | null;
-  specialization_id: string | null;
-  track_id: string | null;
+  grade_levels?: string[];
+  class_ids?: string[];
+  track_ids?: string[];
+  specialization_ids?: string[];
   psychology_enabled: boolean;
+  applies_to_all_in_grade?: boolean;
+  assignment_category?: "חובה" | "התמחות";
   teachers: unknown;
 };
+
+function examTargetRow(e: ExamJoin) {
+  return { id: e.id, ...rowToMultiTarget(e), assignment_category: e.assignment_category };
+}
 
 type StudentJoin = { first_name: string; last_name: string; tz: string };
 
@@ -168,30 +179,21 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const data = await paginateSelect((from, to) =>
         supabase
           .from("exams")
-          .select("id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, grade_level, teachers ( id, first_name, last_name, full_name_generated )")
+          .select("id, subject, exam_date, grade_levels, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, assignment_category, teachers ( id, first_name, last_name, full_name_generated )")
           .eq("academic_year_id", scope.year.id)
           .order("exam_date", { ascending: false })
           .range(from, to),
       );
       const exams = data as ExamJoin[];
-      const labels = await resolveExamTargetLabels(
-        supabase,
-        exams.map((e) => ({
-          id: e.id,
-          class_id: e.class_id,
-          specialization_id: e.specialization_id,
-          track_id: e.track_id,
-          psychology_enabled: e.psychology_enabled,
-        })),
-      );
+      const labels = await resolveExamTargetLabels(supabase, exams.map(examTargetRow));
       const rows = exams.map((e) => {
-        const row = e as ExamJoin & { grade_level: string };
+        const mt = rowToMultiTarget(e);
         return {
           מקצוע: e.subject,
           תאריך: e.exam_date,
           מורה: teacherNameCell(e.teachers),
-          שכבה: formatGradeLabel(row.grade_level as "א" | "ב" | "ג"),
-          סוג_יעד: assignmentTargetTypeLabel(e),
+          שכבות: formatGradeLevelsLabel(mt.grade_levels),
+          סוג_יעד: multiTargetTypeLabel(mt, e.assignment_category),
           שם_יעד: labels[e.id] ?? "—",
         };
       });
@@ -208,33 +210,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
       const raw = data as (ExamJoin & {
         lesson_name?: string | null;
         teaching_mode?: string | null;
-        grade_level: string;
       })[];
-      const labels = await resolveExamTargetLabels(
-        supabase,
-        raw.map((a) => ({
-          id: a.id,
-          class_id: a.class_id,
-          specialization_id: a.specialization_id,
-          track_id: a.track_id,
-          psychology_enabled: a.psychology_enabled,
-        })),
-      );
+      const labels = await resolveExamTargetLabels(supabase, raw.map(examTargetRow));
       const rows = raw.map((a) => {
         const row = a as typeof a & { assignment_category?: "חובה" | "התמחות" };
-        const targetCols = {
-          class_id: a.class_id,
-          specialization_id: a.specialization_id,
-          track_id: a.track_id,
-          psychology_enabled: a.psychology_enabled,
-        };
+        const mt = rowToMultiTarget(a);
         return {
           מורה: teacherNameCell(a.teachers),
           מקצוע: a.subject,
           שם_שיעור: a.lesson_name ?? "",
-          שכבה: formatGradeLabel(a.grade_level as "א" | "ב" | "ג"),
+          שכבות: formatGradeLevelsLabel(mt.grade_levels),
           סוג_שיבוץ: row.assignment_category ?? "—",
-          סוג_יעד: assignmentTargetTypeLabel(targetCols, row.assignment_category),
+          סוג_יעד: multiTargetTypeLabel(mt, row.assignment_category),
           ערך_שיבוץ: labels[a.id] ?? "—",
           סוג_הוראה: teachingModeLabel(a.teaching_mode),
         };
@@ -377,13 +364,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         examMeta.set(raw.exam_id, ex);
       }
     }
-    const labelInputs = [...examMeta.entries()].map(([id, m]) => ({
-      id,
-      class_id: m.class_id,
-      specialization_id: m.specialization_id,
-      track_id: m.track_id,
-      psychology_enabled: m.psychology_enabled,
-    }));
+    const labelInputs = [...examMeta.entries()].map(([id, m]) => examTargetRow({ ...m, id }));
     const examTargetLabels = await resolveExamTargetLabels(supabase, labelInputs);
 
     const rows = lines.map((line) => {
@@ -401,7 +382,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
         מקצוע: ex?.subject ?? "",
         תאריך_מבחן: ex?.exam_date ?? "",
         מורה: ex ? teacherNameCell(ex.teachers) : "",
-        סוג_יעד: ex ? assignmentTargetTypeLabel(ex) : "",
+        סוג_יעד: ex ? multiTargetTypeLabel(rowToMultiTarget(ex), ex.assignment_category) : "",
         שם_יעד: targetLabel,
         שם_פרטי: st?.first_name ?? "",
         שם_משפחה: st?.last_name ?? "",

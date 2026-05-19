@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import {
   examTrackingDueDate,
   EXAM_SUBMISSION_DUE_OFFSET,
@@ -179,7 +180,9 @@ export function TrackingClient() {
                     <TableCell className="whitespace-nowrap tabular-nums text-zinc-600">
                       {examTrackingDueDate(row.exam?.exam_date, EXAM_SUBMISSION_DUE_OFFSET)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{row.exam?.exam_date ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {row.exam?.exam_date ? formatHebrewDateFromYmd(row.exam.exam_date) : "—"}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap tabular-nums text-zinc-600">
                       {examTrackingDueDate(row.exam?.exam_date, GRADES_SUBMISSION_DUE_OFFSET)}
                     </TableCell>

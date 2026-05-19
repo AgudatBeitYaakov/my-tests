@@ -9,6 +9,41 @@ export type GradeLevelOptionRow = {
   is_active: boolean;
 };
 
+export type GradeLevelsRequestBody = {
+  grade_levels?: string[] | null;
+  grade_level?: string | null;
+  grade_level_option_id?: string | null;
+  grade_level_option_ids?: string[] | null;
+};
+
+export function filterGradeLevels(raw: unknown[] | null | undefined): GradeLevel[] {
+  if (!raw?.length) return [];
+  const out: GradeLevel[] = [];
+  for (const item of raw) {
+    const gl =
+      typeof item === "string"
+        ? parseGradeLevel(item)
+        : parseGradeLevel(String(item ?? ""));
+    if (gl && !out.includes(gl)) out.push(gl);
+  }
+  return out;
+}
+
+/** שכבות מבקשת API — עדיפות ל-grade_levels ישיר, אחרת לוקאפ/שדה בודד */
+export async function resolveGradeLevelsFromRequest(
+  supabase: SupabaseClient,
+  body: GradeLevelsRequestBody,
+): Promise<{ gradeLevels: GradeLevel[] } | { error: string }> {
+  const direct = filterGradeLevels(body.grade_levels ?? undefined);
+  if (direct.length) return { gradeLevels: direct };
+
+  const optionIds = [
+    ...(body.grade_level_option_ids ?? []).map((id) => id.trim()).filter(Boolean),
+    ...(body.grade_level_option_id?.trim() ? [body.grade_level_option_id.trim()] : []),
+  ];
+  return resolveGradeLevelsFromOptionIds(supabase, optionIds, body.grade_level);
+}
+
 export function parseGradeLevelsFromName(name: string): GradeLevel[] {
   const trimmed = name.trim();
   if (!trimmed) return [];

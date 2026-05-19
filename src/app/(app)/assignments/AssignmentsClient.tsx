@@ -17,8 +17,11 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
+import {
+  AssignmentTargetForm,
+  type AssignmentTargetFormValue,
+} from "@/components/assignments/AssignmentTargetForm";
 import { TeacherSearchCombobox } from "@/components/teachers/TeacherSearchCombobox";
-import { TEACHING_TRACK_NAME } from "@/lib/students/fields";
 import { teacherEmbedDisplayName, teachingModeLabel } from "@/lib/teachers/display";
 import type { AssignmentCategory, Teacher, TeachingMode } from "@/lib/types/db";
 
@@ -35,12 +38,13 @@ type AssignmentRow = {
   subject: string;
   lesson_name?: string | null;
   teaching_mode?: TeachingMode | null;
-  grade_level: string;
+  grade_levels: string[];
   year_label?: string;
-  class_id: string | null;
-  specialization_id: string | null;
-  track_id: string | null;
+  class_ids: string[];
+  track_ids: string[];
+  specialization_ids: string[];
   psychology_enabled: boolean;
+  applies_to_all_in_grade: boolean;
   assignment_category: AssignmentCategory;
   target_label?: string;
   target_type_label?: string;
@@ -49,19 +53,10 @@ type AssignmentRow = {
 
 type LookupItem = { id: string; name: string };
 
-type GradeLevelOption = {
-  id: string;
-  name: string;
-  grade_levels: GradeLevel[];
-};
-
-type TargetDraft = {
-  assignment_category: AssignmentCategory;
-  class_id: string;
-  specialization_id: string;
-  track_id: string;
-  psychology_enabled: boolean;
-};
+type EditDraft = {
+  subject: string;
+  lesson_name: string;
+} & AssignmentTargetFormValue;
 
 export function AssignmentsClient() {
   const { viewingYear, readOnly } = useAcademicYear();
@@ -88,59 +83,26 @@ export function AssignmentsClient() {
     withYearQuery("/api/lookups/tracks", viewingYear?.id),
     fetcher,
   );
-  const { data: gradeData } = useSWR<{ items: GradeLevelOption[] }>(
-    "/api/lookups/grade-level-options",
-    fetcher,
-  );
-
-  const gradeOptions = gradeData?.items ?? [];
-
   const [teacherId, setTeacherId] = useState("");
   const [subject, setSubject] = useState("");
   const [lessonName, setLessonName] = useState("");
-  const [gradeLevelOptionIds, setGradeLevelOptionIds] = useState<string[]>([]);
-  const [classId, setClassId] = useState("");
-  const [specializationId, setSpecializationId] = useState("");
-  const [trackId, setTrackId] = useState("");
-  const [psychologyEnabled, setPsychologyEnabled] = useState(false);
-  const [assignmentCategory, setAssignmentCategory] = useState<"" | AssignmentCategory>("");
-  const [teachingMode, setTeachingMode] = useState<TeachingMode | "">("");
+  const emptyTargetForm = (): AssignmentTargetFormValue => ({
+    gradeLevels: [],
+    classIds: [],
+    trackIds: [],
+    specializationIds: [],
+    psychologyEnabled: false,
+    appliesToAllInGrade: false,
+    category: "",
+    teachingMode: "",
+  });
+  const [targetForm, setTargetForm] = useState<AssignmentTargetFormValue>(emptyTargetForm);
   const [saving, setSaving] = useState(false);
   const [formNotice, setFormNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  const selectedGradeLevels = useMemo(() => {
-    const levels = new Set<GradeLevel>();
-    for (const id of gradeLevelOptionIds) {
-      const opt = gradeOptions.find((o) => o.id === id);
-      opt?.grade_levels.forEach((g) => levels.add(g));
-    }
-    return levels;
-  }, [gradeLevelOptionIds, gradeOptions]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<{
-    subject: string;
-    lesson_name: string;
-    grade_level: string;
-    teaching_mode: TeachingMode | "";
-  } & TargetDraft | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-
-  const selectedTrackName = trData?.items.find((t) => t.id === trackId)?.name ?? "";
-  const showTeachingMode =
-    assignmentCategory === "חובה" && Boolean(trackId) && selectedTrackName === TEACHING_TRACK_NAME;
-  const showMandatoryTargets = assignmentCategory === "חובה";
-  const showSpecializationTarget = assignmentCategory === "התמחות";
-
-  function selectCategory(next: AssignmentCategory) {
-    setAssignmentCategory(next);
-    if (next === "חובה") setSpecializationId("");
-    if (next === "התמחות") {
-      setClassId("");
-      setTrackId("");
-      setPsychologyEnabled(false);
-      setTeachingMode("");
-    }
-  }
 
   async function addAssignment(e: React.FormEvent) {
     e.preventDefault();
@@ -149,12 +111,19 @@ export function AssignmentsClient() {
     if (!subject.trim() && !lessonName.trim()) {
       return alert("מלאי מקצוע או שם שיעור (לפחות אחד)");
     }
-    if (!gradeLevelOptionIds.length) return alert("בחרי לפחות שכבה אחת");
-    if (!assignmentCategory) return alert("בחרי סוג שיבוץ: חובה או התמחות");
-    if (assignmentCategory === "התמחות") {
-      if (!specializationId) return alert("בחרי התמחות");
-    } else if (!classId && !trackId && !psychologyEnabled) {
-      return alert("בחרי יעד אחד: כיתה, מסלול או פסיכולוגיה");
+    if (!targetForm.gradeLevels.length) return alert("בחרי לפחות שכבה אחת");
+    if (!targetForm.category) return alert("בחרי סוג שיבוץ: חובה או התמחות");
+    if (targetForm.category === "התמחות" && !targetForm.specializationIds.length) {
+      return alert("בחרי לפחות התמחות אחת");
+    }
+    if (
+      targetForm.category === "חובה" &&
+      !targetForm.appliesToAllInGrade &&
+      !targetForm.classIds.length &&
+      !targetForm.trackIds.length &&
+      !targetForm.psychologyEnabled
+    ) {
+      return alert("בחרי יעד: כיתות, מסלולים, פסיכולוגיה, או «כל השכבה»");
     }
     setSaving(true);
     setFormNotice(null);
@@ -166,13 +135,14 @@ export function AssignmentsClient() {
           teacher_id: teacherId,
           subject,
           lesson_name: lessonName.trim() || null,
-          grade_level_option_ids: gradeLevelOptionIds,
-          assignment_category: assignmentCategory,
-          class_id: assignmentCategory === "חובה" ? classId || null : null,
-          specialization_id: assignmentCategory === "התמחות" ? specializationId || null : null,
-          track_id: assignmentCategory === "חובה" ? trackId || null : null,
-          psychology_enabled: assignmentCategory === "חובה" ? psychologyEnabled : false,
-          teaching_mode: showTeachingMode ? teachingMode || null : null,
+          grade_levels: targetForm.gradeLevels,
+          assignment_category: targetForm.category,
+          class_ids: targetForm.classIds,
+          track_ids: targetForm.trackIds,
+          specialization_ids: targetForm.specializationIds,
+          psychology_enabled: targetForm.psychologyEnabled,
+          applies_to_all_in_grade: targetForm.appliesToAllInGrade,
+          teaching_mode: targetForm.teachingMode || null,
         }),
       });
       const j = (await r.json().catch(() => ({}))) as {
@@ -180,25 +150,11 @@ export function AssignmentsClient() {
         created_count?: number;
       };
       if (!r.ok) throw new Error(j.error ?? "שגיאה");
-      const count = j.created_count ?? 1;
-      const levelsLabel = [...selectedGradeLevels].join(", ");
       setTeacherId("");
       setSubject("");
       setLessonName("");
-      setGradeLevelOptionIds([]);
-      setClassId("");
-      setSpecializationId("");
-      setTrackId("");
-      setPsychologyEnabled(false);
-      setAssignmentCategory("");
-      setTeachingMode("");
-      setFormNotice({
-        tone: "success",
-        text:
-          count === 1
-            ? "השיבוץ נוסף בהצלחה"
-            : `נוספו ${count} שיבוצים (שכבות: ${levelsLabel})`,
-      });
+      setTargetForm(emptyTargetForm());
+      setFormNotice({ tone: "success", text: "השיבוץ נוסף בהצלחה (שורה אחת)" });
       await mutate();
     } catch (err) {
       setFormNotice({ tone: "error", text: (err as Error).message });
@@ -212,13 +168,14 @@ export function AssignmentsClient() {
     setEditDraft({
       subject: a.subject,
       lesson_name: a.lesson_name ?? "",
-      grade_level: a.grade_level,
-      assignment_category: a.assignment_category,
-      class_id: a.class_id ?? "",
-      specialization_id: a.specialization_id ?? "",
-      track_id: a.track_id ?? "",
-      psychology_enabled: a.psychology_enabled,
-      teaching_mode: a.teaching_mode ?? "",
+      gradeLevels: a.grade_levels as GradeLevel[],
+      classIds: a.class_ids,
+      trackIds: a.track_ids,
+      specializationIds: a.specialization_ids,
+      psychologyEnabled: a.psychology_enabled,
+      appliesToAllInGrade: a.applies_to_all_in_grade,
+      category: a.assignment_category,
+      teachingMode: a.teaching_mode ?? "",
     });
   }
 
@@ -227,26 +184,23 @@ export function AssignmentsClient() {
     setEditDraft(null);
   }
 
-  const editTrackName =
-    editDraft?.track_id ? (trData?.items.find((t) => t.id === editDraft.track_id)?.name ?? "") : "";
-  const editShowTeachingMode =
-    editDraft?.assignment_category === "חובה" &&
-    Boolean(editDraft?.track_id) &&
-    editTrackName === TEACHING_TRACK_NAME;
-
   async function saveEdit(id: string) {
     if (!editDraft || readOnly) return;
     if (!editDraft.subject.trim() && !editDraft.lesson_name.trim()) {
       return alert("מלאי מקצוע או שם שיעור (לפחות אחד)");
     }
-    if (editDraft.assignment_category === "התמחות") {
-      if (!editDraft.specialization_id) return alert("בחרי התמחות");
-    } else if (
-      !editDraft.class_id &&
-      !editDraft.track_id &&
-      !editDraft.psychology_enabled
+    if (!editDraft.gradeLevels.length) return alert("בחרי לפחות שכבה אחת");
+    if (editDraft.category === "התמחות" && !editDraft.specializationIds.length) {
+      return alert("בחרי לפחות התמחות אחת");
+    }
+    if (
+      editDraft.category === "חובה" &&
+      !editDraft.appliesToAllInGrade &&
+      !editDraft.classIds.length &&
+      !editDraft.trackIds.length &&
+      !editDraft.psychologyEnabled
     ) {
-      return alert("בחרי יעד אחד: כיתה, מסלול או פסיכולוגיה");
+      return alert("בחרי יעד: כיתות, מסלולים, פסיכולוגיה, או «כל השכבה»");
     }
     setEditSaving(true);
     try {
@@ -256,15 +210,14 @@ export function AssignmentsClient() {
         body: JSON.stringify({
           subject: editDraft.subject,
           lesson_name: editDraft.lesson_name.trim() || null,
-          grade_level: editDraft.grade_level,
-          assignment_category: editDraft.assignment_category,
-          class_id: editDraft.assignment_category === "חובה" ? editDraft.class_id || null : null,
-          specialization_id:
-            editDraft.assignment_category === "התמחות" ? editDraft.specialization_id || null : null,
-          track_id: editDraft.assignment_category === "חובה" ? editDraft.track_id || null : null,
-          psychology_enabled:
-            editDraft.assignment_category === "חובה" ? editDraft.psychology_enabled : false,
-          teaching_mode: editShowTeachingMode ? editDraft.teaching_mode || null : null,
+          grade_levels: editDraft.gradeLevels,
+          assignment_category: editDraft.category,
+          class_ids: editDraft.classIds,
+          track_ids: editDraft.trackIds,
+          specialization_ids: editDraft.specializationIds,
+          psychology_enabled: editDraft.psychologyEnabled,
+          applies_to_all_in_grade: editDraft.appliesToAllInGrade,
+          teaching_mode: editDraft.teachingMode || null,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -360,164 +313,19 @@ export function AssignmentsClient() {
           <p className="mt-1 text-xs text-zinc-500">מקצוע או שם שיעור — חובה למלא אחד מהם</p>
         </label>
 
-        <fieldset className="block md:col-span-2 lg:col-span-3">
-          <legend className="text-sm font-medium text-zinc-700">שכבות * (אפשר כמה)</legend>
-          <div className="mt-2 flex flex-wrap gap-3">
-            {gradeOptions.map((o) => {
-              const checked = gradeLevelOptionIds.includes(o.id);
-              return (
-                <label
-                  key={o.id}
-                  className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                    checked ? "border-zinc-900 bg-zinc-50" : "border-zinc-200"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      setGradeLevelOptionIds((prev) =>
-                        checked ? prev.filter((id) => id !== o.id) : [...prev, o.id],
-                      );
-                    }}
-                  />
-                  {o.name}
-                  <span className="text-xs text-zinc-500">({o.grade_levels.join(", ")})</span>
-                </label>
-              );
-            })}
-          </div>
-          {!gradeOptions.length ? (
-            <p className="mt-1 text-xs text-amber-800">
-              אין שכבות בלוקאפ — הוסיפי בהגדרות → שכבות (למשל: א, ב, ג, א+ב)
-            </p>
-          ) : null}
-          {gradeLevelOptionIds.length > 1 ? (
-            <p className="mt-2 text-xs text-zinc-600">
-              נבחרו {selectedGradeLevels.size} שכבות — ייווצרו {selectedGradeLevels.size} שיבוצים (אותו מקצוע ויעד)
-            </p>
-          ) : null}
-        </fieldset>
-
-        <fieldset className="block md:col-span-2 lg:col-span-3">
-          <legend className="text-sm font-medium text-zinc-700">סוג שיבוץ *</legend>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {(["חובה", "התמחות"] as const).map((opt) => (
-              <label key={opt} className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="assignment_category"
-                  required
-                  checked={assignmentCategory === opt}
-                  onChange={() => selectCategory(opt)}
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        {showMandatoryTargets ? (
-          <>
-            <label className="block">
-              <span className="text-sm font-medium text-zinc-700">כיתה</span>
-              <select
-                value={classId}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setClassId(v);
-                  if (v) {
-                    setTrackId("");
-                    setPsychologyEnabled(false);
-                    setTeachingMode("");
-                  }
-                }}
-                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">— ללא —</option>
-                {(clData?.items ?? []).map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-zinc-700">מסלול</span>
-              <select
-                value={trackId}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setTrackId(v);
-                  if (v) {
-                    setClassId("");
-                    setPsychologyEnabled(false);
-                  } else {
-                    setTeachingMode("");
-                  }
-                }}
-                className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">— ללא —</option>
-                {(trData?.items ?? []).map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-end gap-2 pb-2 md:col-span-2">
-              <input
-                type="checkbox"
-                checked={psychologyEnabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setPsychologyEnabled(on);
-                  if (on) {
-                    setClassId("");
-                    setTrackId("");
-                    setTeachingMode("");
-                  }
-                }}
-              />
-              <span className="text-sm font-medium text-zinc-700">מיועד לפסיכולוגיה</span>
-            </label>
-          </>
-        ) : null}
-
-        {showSpecializationTarget ? (
-          <label className="block">
-            <span className="text-sm font-medium text-zinc-700">התמחות *</span>
-            <select
-              required
-              value={specializationId}
-              onChange={(e) => setSpecializationId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">— בחרי —</option>
-              {(spData?.items ?? []).map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        {showTeachingMode ? (
-          <label className="block">
-            <span className="text-sm font-medium text-zinc-700">סוג הוראה</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-              value={teachingMode}
-              onChange={(e) => setTeachingMode(e.target.value as TeachingMode | "")}
-            >
-              <option value="">— ללא סינון —</option>
-              <option value="full">מלא</option>
-              <option value="short">מקוצר</option>
-            </select>
-          </label>
-        ) : null}
+        <div className="md:col-span-2 lg:col-span-3">
+          <AssignmentTargetForm
+            value={targetForm}
+            onChange={setTargetForm}
+            classes={clData?.items ?? []}
+            tracks={trData?.items ?? []}
+            specializations={spData?.items ?? []}
+            disabled={readOnly}
+          />
+          <p className="mt-2 text-xs text-zinc-600">
+            שיבוץ אחד בשורה אחת — כל השכבות והיעדים שנבחרו ייכללו יחד.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-3">
           {formNotice ? (
@@ -605,162 +413,29 @@ export function AssignmentsClient() {
                     )}
                   </TableCell>
                   <TableCell className="text-slate-600 dark:text-zinc-300">
-                    {isEditing ? (
-                      <div className="flex flex-col gap-1 text-xs">
-                        {(["חובה", "התמחות"] as const).map((opt) => (
-                          <label key={opt} className="inline-flex items-center gap-1">
-                            <input
-                              type="radio"
-                              checked={editDraft.assignment_category === opt}
-                              onChange={() => {
-                                const next = { ...editDraft, assignment_category: opt };
-                                if (opt === "חובה") next.specialization_id = "";
-                                if (opt === "התמחות") {
-                                  next.class_id = "";
-                                  next.track_id = "";
-                                  next.psychology_enabled = false;
-                                  next.teaching_mode = "";
-                                }
-                                setEditDraft(next);
-                              }}
-                            />
-                            {opt}
-                          </label>
-                        ))}
-                      </div>
-                    ) : (
-                      a.assignment_category
-                    )}
+                    {isEditing ? editDraft.category : a.assignment_category}
                   </TableCell>
-                  <TableCell className="text-slate-800 dark:text-zinc-200">
+                  <TableCell className="text-slate-800 dark:text-zinc-200" colSpan={isEditing ? 2 : 1}>
                     {isEditing ? (
-                      <div className="flex min-w-[14rem] flex-col gap-1">
-                        {editDraft.assignment_category === "חובה" ? (
-                          <>
-                            <select
-                              value={editDraft.class_id}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditDraft({
-                                  ...editDraft,
-                                  class_id: v,
-                                  track_id: v ? "" : editDraft.track_id,
-                                  psychology_enabled: v ? false : editDraft.psychology_enabled,
-                                  teaching_mode: v ? "" : editDraft.teaching_mode,
-                                });
-                              }}
-                              className="rounded border border-zinc-200 px-1 py-0.5 text-xs"
-                            >
-                              <option value="">כיתה</option>
-                              {(clData?.items ?? []).map((o) => (
-                                <option key={o.id} value={o.id}>
-                                  {o.name}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              value={editDraft.track_id}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditDraft({
-                                  ...editDraft,
-                                  track_id: v,
-                                  class_id: v ? "" : editDraft.class_id,
-                                  psychology_enabled: v ? false : editDraft.psychology_enabled,
-                                  teaching_mode: v ? "" : editDraft.teaching_mode,
-                                });
-                              }}
-                              className="rounded border border-zinc-200 px-1 py-0.5 text-xs"
-                            >
-                              <option value="">מסלול</option>
-                              {(trData?.items ?? []).map((o) => (
-                                <option key={o.id} value={o.id}>
-                                  {o.name}
-                                </option>
-                              ))}
-                            </select>
-                            <label className="inline-flex items-center gap-1 text-xs">
-                              <input
-                                type="checkbox"
-                                checked={editDraft.psychology_enabled}
-                                onChange={(e) => {
-                                  const on = e.target.checked;
-                                  setEditDraft({
-                                    ...editDraft,
-                                    psychology_enabled: on,
-                                    class_id: on ? "" : editDraft.class_id,
-                                    track_id: on ? "" : editDraft.track_id,
-                                    teaching_mode: on ? "" : editDraft.teaching_mode,
-                                  });
-                                }}
-                              />
-                              פסיכולוגיה
-                            </label>
-                          </>
-                        ) : (
-                          <select
-                            value={editDraft.specialization_id}
-                            onChange={(e) =>
-                              setEditDraft({ ...editDraft, specialization_id: e.target.value })
-                            }
-                            className="rounded border border-zinc-200 px-1 py-0.5 text-xs"
-                          >
-                            <option value="">התמחות</option>
-                            {(spData?.items ?? []).map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
+                      <AssignmentTargetForm
+                        value={editDraft}
+                        onChange={(next) => setEditDraft({ ...editDraft, ...next })}
+                        classes={clData?.items ?? []}
+                        tracks={trData?.items ?? []}
+                        specializations={spData?.items ?? []}
+                      />
                     ) : (
                       a.target_label ?? "—"
                     )}
                   </TableCell>
+                  {isEditing ? null : (
                   <TableCell>
-                    {isEditing ? (
-                      <div className="flex flex-wrap items-center gap-1">
-                        <select
-                          value={editDraft.grade_level}
-                          onChange={(e) =>
-                            setEditDraft({
-                              ...editDraft,
-                              grade_level: e.target.value,
-                            })
-                          }
-                          className="rounded border border-zinc-200 px-2 py-1 text-sm"
-                        >
-                          {(aData?.grades ?? []).map((g) => (
-                            <option key={g.grade_level} value={g.grade_level}>
-                              {g.label}
-                            </option>
-                          ))}
-                        </select>
-                        {editShowTeachingMode ? (
-                          <select
-                            value={editDraft.teaching_mode}
-                            onChange={(e) =>
-                              setEditDraft({
-                                ...editDraft,
-                                teaching_mode: e.target.value as TeachingMode | "",
-                              })
-                            }
-                            className="rounded border border-zinc-200 px-2 py-1 text-sm"
-                          >
-                            <option value="">—</option>
-                            <option value="full">מלא</option>
-                            <option value="short">מקוצר</option>
-                          </select>
-                        ) : null}
-                      </div>
-                    ) : (
                       <>
-                        {a.year_label ?? `שכבה ${a.grade_level}`}
+                        {a.year_label ?? a.grade_levels.join(", ")}
                         {a.teaching_mode ? ` · ${teachingModeLabel(a.teaching_mode)}` : ""}
                       </>
-                    )}
                   </TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap">
                     {!readOnly ? (
                       isEditing ? (

@@ -9,6 +9,7 @@ import { ListDataCard, ListPageHeader, ListTableToolbar, LIST_ROW_LINK_CLASS } f
 import { MakeupStatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
 
@@ -120,7 +121,7 @@ export function MakeupsClient() {
                     {m.student ? `${m.student.last_name} ${m.student.first_name}` : "—"}
                   </TableCell>
                   <TableCell>{m.exam?.subject ?? "—"}</TableCell>
-                  <TableCell>{m.exam?.exam_date ?? "—"}</TableCell>
+                  <TableCell>{m.exam?.exam_date ? formatHebrewDateFromYmd(m.exam.exam_date) : "—"}</TableCell>
                   <TableCell>{m.exam?.teacher_name ?? "—"}</TableCell>
                   <TableCell>
                     <MakeupStatusBadge status={m.status as "open" | "completed"} />
