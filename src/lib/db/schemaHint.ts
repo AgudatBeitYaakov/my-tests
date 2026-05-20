@@ -19,5 +19,14 @@ export function dbSchemaHint(message: string): string {
   if (m.includes("grade_level_options") && (m.includes("does not exist") || m.includes("schema cache"))) {
     return "טבלת אפשרויות שכבה חסרה — הריצי supabase/PATCH_GRADE_LEVEL_OPTIONS.sql או RUN_FULL_DATABASE_RESET.sql";
   }
+  if (
+    (m.includes("targets_fingerprint") ||
+      m.includes("grade_levels") ||
+      m.includes("class_ids") ||
+      m.includes("applies_to_all_in_grade")) &&
+    (m.includes("does not exist") || m.includes("column"))
+  ) {
+    return "סכמת שיבוצים/מבחנים לא מעודכנת — הריצי supabase/RUN_FULL_DATABASE_RESET.sql ב-Supabase SQL Editor (מסד חדש/איפוס מלא)";
+  }
   return message;
 }

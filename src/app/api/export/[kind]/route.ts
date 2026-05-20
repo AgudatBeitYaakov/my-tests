@@ -346,7 +346,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           student_id,
           exam_id,
           students ( first_name, last_name, tz ),
-          exams ( id, subject, exam_date, class_id, specialization_id, track_id, psychology_enabled, ${TEACHER_EMBED_IN_EXAM} )
+          exams ( id, subject, exam_date, grade_levels, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, assignment_category, ${TEACHER_EMBED_IN_EXAM} )
         `,
         )
         .order("exam_id")

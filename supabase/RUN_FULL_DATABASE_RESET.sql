@@ -1,30 +1,3 @@
--- =============================================================================
--- RUN_FULL_DATABASE_RESET.sql — הרצה אחת מההתחלה (מוחק הכל ויוצר מחדש)
--- =============================================================================
--- Supabase → SQL Editor → העתיקי את כל הקובץ → Run
---
--- קובץ זה מאחד את כל השינויים — אחרי איפוס מלא אין להריץ PATCH_*.sql בנפרד.
--- לעדכון מסד קיים בלי מחיקת נתונים: PATCH_ALL_FOR_EXISTING_DB.sql
---
--- כולל במלואו:
---   PATCH_AUTH_USERS            — משתמשים, deleted_at, ייחודיות username, admin
---   PATCH_SCHOOL_YEARS_ISOLATED — שנים עצמאיות, לוקאפים/מורות לפי שנה, school_years
---   PATCH_GRADE_LEVEL_OPTIONS   — אפשרויות שכבה למבחנים (א, ב, ג, א+ב)
---   PATCH_STUDENT_EXTENSIONS    — התמחות שנייה, פסיכולוגיה, סוג הוראה
---   PATCH_REMAINING_FEATURES    — makeup_locked, snapshots, התראות, audit, pg_trgm
---   PATCH_ASSIGNMENT_MULTI_TARGET — שיבוצים/מבחנים רב-יעד (grade_levels[], class_ids[], …)
---   PATCH_MAKEUP_TRACKING       — makeup_tracking, grade ב-makeup_exams, מילוי שנה
---
--- טבלאות פעילות (17): academic_years, classes, specializations, tracks,
---   grade_level_options, users, teachers, students, teacher_assignments, exams,
---   exam_students, makeup_exams, makeup_tracking, exam_tracking, student_history,
---   audit_logs, notifications
--- טבלאות ישנות שנמחקות: cohorts, year_cohorts, year_layers, grade_levels (ישנה)
---
--- אחרי ההרצה: רענון קשיח בדפדפן + npm run dev
--- התחברות ראשונה: admin / admin (או יצירת משתמש בהגדרות)
--- =============================================================================
-
 drop view if exists public.school_years;
 drop view if exists public.active_cohorts_view;
 
@@ -47,16 +20,19 @@ drop table if exists public.year_layers cascade;
 drop table if exists public.classes cascade;
 drop table if exists public.specializations cascade;
 drop table if exists public.tracks cascade;
+drop table if exists public.grade_level_options cascade;
 drop table if exists public.grade_levels cascade;
 drop table if exists public.academic_years cascade;
 
 drop function if exists public.cohorts_enforce_max_two_active() cascade;
 drop function if exists public.set_updated_at() cascade;
 drop function if exists public.exams_validate_target() cascade;
+drop function if exists public.exams_validate_multi_target() cascade;
 drop function if exists public.exams_validate_assignment_cohort() cascade;
 drop function if exists public.exams_validate_assignment_year() cascade;
 drop function if exists public.exams_validate_assignment_scope() cascade;
 drop function if exists public.assignments_validate_target() cascade;
+drop function if exists public.assignments_validate_multi_target() cascade;
 drop function if exists public.students_validate_teaching_fields() cascade;
 drop function if exists public.students_validate_year_grade() cascade;
 drop function if exists public.academic_years_single_active() cascade;
@@ -81,7 +57,6 @@ create type public.exam_student_status as enum ('pending', 'took', 'missing', 'm
 create type public.makeup_exam_status as enum ('open', 'completed');
 create type public.student_status as enum ('active', 'left', 'graduated');
 
--- ─── PATCH_SCHOOL_YEARS_ISOLATED: שנות לימוד + לוקאפים לפי שנה ───────────────
 create table public.academic_years (
   id uuid primary key default gen_random_uuid(),
   year_name text not null unique,
@@ -90,9 +65,6 @@ create table public.academic_years (
   is_active boolean not null default false,
   created_at timestamptz not null default now()
 );
-
-comment on table public.academic_years is
-  'שנת לימודים עצמאית — כל הנתונים מקושרים לשנה; אין סנכרון בין שנים';
 
 create unique index uq_academic_years_one_active on public.academic_years (is_active) where is_active = true;
 
@@ -139,7 +111,6 @@ create unique index uq_tracks_name_per_year
   on public.tracks (academic_year_id, name)
   where deleted_at is null;
 
--- ─── PATCH_GRADE_LEVEL_OPTIONS: שכבות למבחנים (א / ב / ג / א+ב) ───────────────
 create table public.grade_level_options (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -153,7 +124,6 @@ create table public.grade_level_options (
 
 create index idx_grade_level_options_active on public.grade_level_options (is_active) where is_active = true;
 
--- ─── PATCH_AUTH_USERS: משתמשים ─────────────────────────────────────────────
 create table public.users (
   id uuid primary key default gen_random_uuid(),
   username text not null,
@@ -198,7 +168,6 @@ create index idx_classes_year on public.classes (academic_year_id);
 create index idx_specializations_year on public.specializations (academic_year_id);
 create index idx_tracks_year on public.tracks (academic_year_id);
 
--- ─── PATCH_STUDENT_EXTENSIONS: תלמידות (התמחות שנייה, פסיכולוגיה, הוראה) ───
 create table public.students (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
@@ -369,7 +338,6 @@ create unique index uq_exams_assignment_date on public.exams (
   exam_date
 ) where deleted_at is null;
 
--- ─── PATCH_REMAINING_FEATURES: snapshots, makeup_locked ─────────────────────
 create table public.exam_students (
   id uuid primary key default gen_random_uuid(),
   exam_id uuid not null references public.exams (id) on delete restrict,
@@ -391,7 +359,6 @@ create table public.exam_students (
   unique (exam_id, student_id)
 );
 
--- ─── PATCH_MAKEUP_TRACKING: השלמות + מעקב ───────────────────────────────────
 create table public.makeup_exams (
   id uuid primary key default gen_random_uuid(),
   academic_year_id uuid not null references public.academic_years (id) on delete restrict,
@@ -461,7 +428,6 @@ create table public.student_history (
   changed_by uuid references public.users (id) on delete set null
 );
 
--- ─── PATCH_REMAINING_FEATURES: audit, התראות ──────────────────────────────
 create table public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.users (id) on delete set null,
@@ -711,7 +677,6 @@ create trigger trg_teachers_validate_year
   before update of academic_year_id on public.teachers
   for each row execute function public.teachers_validate_year_scope();
 
--- ממלא academic_year_id כשהאפליקציה לא שולחת (מעקב, היסטוריה, השלמות)
 create or replace function public.exam_tracking_fill_academic_year()
 returns trigger language plpgsql as $$
 begin
@@ -831,15 +796,13 @@ alter table public.exam_tracking enable row level security;
 alter table public.student_history enable row level security;
 alter table public.audit_logs enable row level security;
 
--- ─── נתוני התחלה מינימליים (שנה פעילה + אפשרויות שכבה + admin) ─────────────
--- כיתות / התמחויות / מסלולים — ריקים; הוסיפי בהגדרות או בייבוא.
+insert into public.grade_level_options (name, grade_levels) values
   ('א', array['א']::text[]),
   ('ב', array['ב']::text[]),
   ('ג', array['ג']::text[]),
   ('א+ב', array['א', 'ב']::text[])
 on conflict (name) do nothing;
 
--- משתמש ראשון (אופציונלי): admin / סיסמה admin — אפשר גם ליצור בהתחברות הראשונה
 insert into public.users (username, password_hash, full_name, active)
 select
   'admin',
@@ -850,7 +813,6 @@ where not exists (
   select 1 from public.users where username = 'admin' and deleted_at is null
 );
 
--- PATCH_SCHOOL_YEARS_ISOLATED: תצוגת קריאה (school_years = academic_years)
 create or replace view public.school_years as
   select
     id,
@@ -861,5 +823,4 @@ create or replace view public.school_years as
     created_at
   from public.academic_years;
 
--- סיום: סכמה מלאה — שנים עצמאיות, מעקב השלמות, משתמשים, מבחנים רב-שכבה
 notify pgrst, 'reload schema';

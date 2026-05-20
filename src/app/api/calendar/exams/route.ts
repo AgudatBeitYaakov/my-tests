@@ -82,32 +82,12 @@ export async function GET(request: Request) {
 
   const teacherEmbed =
     "teachers ( id, first_name, last_name, full_name_generated )";
-  const newSelect = `id, subject, exam_date, grade_levels, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, assignment_category, teacher_id, ${teacherEmbed}`;
-  const oldSelect = `id, subject, exam_date, grade_level, class_id, track_id, specialization_id, psychology_enabled, assignment_category, teacher_id, ${teacherEmbed}`;
+  const select = `id, subject, exam_date, grade_levels, class_ids, track_ids, specialization_ids, psychology_enabled, applies_to_all_in_grade, assignment_category, teacher_id, ${teacherEmbed}`;
 
-  const baseQuery = () =>
-    notDeleted(supabase.from("exams").select(newSelect))
-      .eq("academic_year_id", scope.year.id)
-      .gte("exam_date", start)
-      .lte("exam_date", end);
-
-  let examsRaw: Record<string, unknown>[] | null = null;
-  let eErr: { message: string } | null = null;
-
-  const withNew = await baseQuery();
-  if (withNew.error) {
-    const withOld = await notDeleted(supabase.from("exams").select(oldSelect))
-      .eq("academic_year_id", scope.year.id)
-      .gte("exam_date", start)
-      .lte("exam_date", end);
-    if (withOld.error) {
-      eErr = withOld.error;
-    } else {
-      examsRaw = (withOld.data ?? []) as Record<string, unknown>[];
-    }
-  } else {
-    examsRaw = (withNew.data ?? []) as Record<string, unknown>[];
-  }
+  const { data: examsRaw, error: eErr } = await notDeleted(supabase.from("exams").select(select))
+    .eq("academic_year_id", scope.year.id)
+    .gte("exam_date", start)
+    .lte("exam_date", end);
 
   if (eErr) return NextResponse.json({ error: eErr.message }, { status: 500 });
 
@@ -116,13 +96,9 @@ export async function GET(request: Request) {
     subject: string;
     exam_date: string;
     grade_levels?: string[];
-    grade_level?: string | null;
     class_ids?: string[];
-    class_id?: string | null;
     track_ids?: string[];
-    track_id?: string | null;
     specialization_ids?: string[];
-    specialization_id?: string | null;
     psychology_enabled: boolean;
     applies_to_all_in_grade?: boolean;
     assignment_category: "חובה" | "התמחות";

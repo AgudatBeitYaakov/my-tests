@@ -33,25 +33,14 @@ async function loadExamsById(
   examIds: string[],
   academicYearId: string,
 ): Promise<{ examsBy: Map<string, ExamSummary> } | { error: string }> {
-  const withNew = await supabase
+  const { data: exams, error } = await supabase
     .from("exams")
-    .select(
-      `id, subject, exam_date, teacher_id, grade_level, grade_levels, ${TEACHER_EMBED_IN_EXAM}`,
-    )
+    .select(`id, subject, exam_date, teacher_id, grade_levels, ${TEACHER_EMBED_IN_EXAM}`)
     .in("id", examIds)
     .eq("academic_year_id", academicYearId);
 
-  let exams: Record<string, unknown>[] | null = withNew.data;
-  if (withNew.error) {
-    const withOld = await supabase
-      .from("exams")
-      .select(`id, subject, exam_date, teacher_id, grade_level, ${TEACHER_EMBED_IN_EXAM}`)
-      .in("id", examIds)
-      .eq("academic_year_id", academicYearId);
-    if (withOld.error) {
-      return { error: makeupTrackingTableHint(withOld.error.message) };
-    }
-    exams = (withOld.data ?? []) as Record<string, unknown>[];
+  if (error) {
+    return { error: makeupTrackingTableHint(error.message) };
   }
 
   const examsBy = new Map<string, ExamSummary>();
@@ -61,7 +50,6 @@ async function loadExamsById(
       subject: string;
       exam_date: string;
       teacher_id: string;
-      grade_level?: string | null;
       grade_levels?: string[] | null;
       teachers: unknown;
     };
