@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import useSWR from "swr";
+import { ConfirmDangerDialog } from "@/components/ui/ConfirmDangerDialog";
 import { ExamStudentStatusBadge } from "@/components/ui/StatusBadge";
 import { Spinner } from "@/components/ui/Spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,6 +12,7 @@ import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { NotesButton } from "@/components/ui/NotesButton";
 import { PrintButton } from "@/components/PrintButton";
 import { TableClearFooter } from "@/components/ui/TableClearFooter";
+import { EXAM_HARD_DELETE_PHRASE } from "@/lib/exams/deleteExam";
 import { pickLookupName } from "@/lib/lookups/display";
 import { psychologyLabel } from "@/lib/students/display";
 import { teachingTrackTypeLabel } from "@/lib/students/fields";
@@ -47,6 +51,13 @@ type Exam = {
   teachers: Teacher | null;
 };
 
+type DeletePreview = {
+  exam_students: number;
+  makeup_exams: number;
+  makeup_tracking: number;
+  exam_tracking: number;
+};
+
 function countStatuses(lines: Line[]) {
   let took = 0;
   let forMakeup = 0;
@@ -66,7 +77,14 @@ const lineStatusHe: Record<string, string> = {
 };
 
 export function ExamEditClient({ id }: { id: string }) {
-  const { data, error, isLoading, mutate } = useSWR<{ exam: Exam; exam_students: Line[] }>(
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const { data, error, isLoading, mutate } = useSWR<{
+    exam: Exam;
+    exam_students: Line[];
+    delete_preview?: DeletePreview;
+  }>(
     `/api/exams/${id}`,
     fetcher,
   );
@@ -97,6 +115,26 @@ export function ExamEditClient({ id }: { id: string }) {
     alert(`נוצרו/עודכנו ${(j as { created?: number }).created ?? 0} השלמות`);
   }
 
+  async function deleteExam() {
+    setDeleteBusy(true);
+    try {
+      const r = await fetch(`/api/exams/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm_phrase: EXAM_HARD_DELETE_PHRASE }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        alert((j as { error?: string }).error ?? "מחיקה נכשלה");
+        return;
+      }
+      router.push("/exams");
+      router.refresh();
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 py-16 text-zinc-600">
@@ -111,8 +149,26 @@ export function ExamEditClient({ id }: { id: string }) {
 
   const e = data.exam;
   const lines = data.exam_students ?? [];
+  const preview = data.delete_preview;
   const { total, took, forMakeup } = countStatuses(lines);
   const locked = Boolean(e.makeup_locked_at);
+
+  const deleteHint = preview
+    ? [
+        "מחיקה קשה — לא ניתן לשחזר.",
+        "",
+        "יימחקו לצמיתות:",
+        `• ${preview.exam_students} שורות תלמידות במבחן`,
+        preview.makeup_exams ? `• ${preview.makeup_exams} השלמות` : null,
+        preview.makeup_tracking ? `• ${preview.makeup_tracking} רשומות מעקב השלמות` : null,
+        preview.exam_tracking ? `• ${preview.exam_tracking} רשומות מעקב מורה` : null,
+        "• המבחן עצמו וכל התיעוד שלו",
+        "",
+        locked ? "שימי לב: המבחן כבר ננעל והיו בו השלמות." : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "מחיקה קשה — כל הנתונים הקשורים למבחן יימחקו לצמיתות.";
 
   return (
     <div className="space-y-6">
@@ -148,11 +204,30 @@ export function ExamEditClient({ id }: { id: string }) {
           >
             {locked ? "המבחן ננעל — השלמות נוצרו" : "סיום — יצירת השלמות"}
           </button>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100"
+          >
+            מחק מבחן
+          </button>
           <Link href="/exams" className="rounded-lg border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800">
             חזרה
           </Link>
         </div>
       </div>
+
+      <ConfirmDangerDialog
+        open={deleteOpen}
+        onClose={() => !deleteBusy && setDeleteOpen(false)}
+        title="מחיקת מבחן לצמיתות"
+        description={`${e.subject} · ${formatHebrewDateFromYmd(e.exam_date)} — פעולה בלתי הפיכה.`}
+        hint={deleteHint}
+        requiredPhrase={EXAM_HARD_DELETE_PHRASE}
+        confirmLabel="כן, מחק לצמיתות"
+        busy={deleteBusy}
+        onConfirm={() => deleteExam()}
+      />
 
       <div className="grid gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-3">
         <div>

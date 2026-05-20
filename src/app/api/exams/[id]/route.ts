@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { rowToMultiTarget } from "@/lib/assignments/multiTarget";
+import {
+  EXAM_HARD_DELETE_PHRASE,
+  hardDeleteExam,
+  previewExamHardDelete,
+} from "@/lib/exams/deleteExam";
 import { resolveExamTargetLabels } from "@/lib/exams/resolveTargetNames";
+import {
+  readOnlyResponse,
+  resolveAcademicYearScope,
+  scopeFromSearchParams,
+} from "@/lib/academicYears/scope";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +33,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     { id: row.id, ...rowToMultiTarget(exam) },
   ]);
   const examEnriched = { ...exam, target_label: labels[row.id] ?? "—" };
+  const delete_preview = await previewExamHardDelete(supabase, id);
 
   const { data: lines, error: lErr } = await supabase
     .from("exam_students")
@@ -75,5 +86,41 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       return la.localeCompare(lb, "he");
     });
 
-  return NextResponse.json({ exam: examEnriched, exam_students });
+  return NextResponse.json({ exam: examEnriched, exam_students, delete_preview });
+}
+
+export async function DELETE(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const { searchParams } = new URL(request.url);
+  const supabase = createSupabaseAdminClient();
+  const scope = await resolveAcademicYearScope(supabase, scopeFromSearchParams(searchParams));
+  if (scope.readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as { confirm_phrase?: string };
+  if (body.confirm_phrase?.trim() !== EXAM_HARD_DELETE_PHRASE) {
+    return NextResponse.json(
+      { error: `יש להקליד בדיוק: ${EXAM_HARD_DELETE_PHRASE}` },
+      { status: 400 },
+    );
+  }
+
+  const { data: exam, error: loadErr } = await supabase
+    .from("exams")
+    .select("id, academic_year_id, subject, exam_date")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
+  if (!exam) return NextResponse.json({ error: "מבחן לא נמצא" }, { status: 404 });
+  if (exam.academic_year_id !== scope.year.id) {
+    return NextResponse.json({ error: "מבחן לא שייך לשנה הנוכחית" }, { status: 403 });
+  }
+
+  const result = await hardDeleteExam(supabase, id);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
 }
