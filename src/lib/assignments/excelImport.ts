@@ -81,9 +81,12 @@ export const ASSIGNMENT_FIELD_ALIASES: Record<
   teaching_mode_raw: ["סוג הוראה", "הוראה מקוצר", "teaching_mode"],
 };
 
-const REQUIRED_FIELDS: (keyof typeof ASSIGNMENT_FIELD_ALIASES)[] = [
+const TEACHER_NAME_FIELDS: (keyof typeof ASSIGNMENT_FIELD_ALIASES)[] = [
   "teacher_first_name",
   "teacher_last_name",
+];
+
+const REQUIRED_FIELDS: (keyof typeof ASSIGNMENT_FIELD_ALIASES)[] = [
   "grade_level",
   "assignment_category_raw",
 ];
@@ -150,6 +153,14 @@ export function assertAssignmentRequiredHeaders(rawKeys: string[]): string | nul
     const ok = ASSIGNMENT_FIELD_ALIASES[field].some((a) => nk.has(normalizeHeaderKey(a)));
     if (!ok) missing.push(ASSIGNMENT_FIELD_ALIASES[field][0]);
   }
+  const hasAnyTeacherName = TEACHER_NAME_FIELDS.some((field) =>
+    ASSIGNMENT_FIELD_ALIASES[field].some((a) => nk.has(normalizeHeaderKey(a))),
+  );
+  if (!hasAnyTeacherName) {
+    missing.push(
+      `${ASSIGNMENT_FIELD_ALIASES.teacher_first_name[0]} / ${ASSIGNMENT_FIELD_ALIASES.teacher_last_name[0]} (לפחות אחד)`,
+    );
+  }
   const hasSubjectOrLesson =
     ASSIGNMENT_FIELD_ALIASES.subject.some((a) => nk.has(normalizeHeaderKey(a))) ||
     ASSIGNMENT_FIELD_ALIASES.lesson_name.some((a) => nk.has(normalizeHeaderKey(a)));
@@ -207,20 +218,33 @@ function normalizeNameKey(s: string): string {
 export type TeacherLookupMaps = {
   byFullName: Map<string, string>;
   byParts: Map<string, string>;
+  byFirst: Map<string, string[]>;
+  byLast: Map<string, string[]>;
 };
+
+function addToNameBucket(map: Map<string, string[]>, key: string, id: string): void {
+  if (!key) return;
+  const list = map.get(key) ?? [];
+  if (!list.includes(id)) list.push(id);
+  map.set(key, list);
+}
 
 export function buildTeacherLookupMaps(
   teachers: { id: string; first_name: string; last_name: string; full_name_generated?: string | null }[],
 ): TeacherLookupMaps {
   const byFullName = new Map<string, string>();
   const byParts = new Map<string, string>();
+  const byFirst = new Map<string, string[]>();
+  const byLast = new Map<string, string[]>();
   for (const t of teachers) {
     const full = normalizeNameKey(teacherDisplayName(t));
     if (full) byFullName.set(full, t.id);
     const parts = normalizeNameKey(`${t.first_name} ${t.last_name}`);
     if (parts) byParts.set(parts, t.id);
+    addToNameBucket(byFirst, normalizeNameKey(t.first_name), t.id);
+    addToNameBucket(byLast, normalizeNameKey(t.last_name), t.id);
   }
-  return { byFullName, byParts };
+  return { byFullName, byParts, byFirst, byLast };
 }
 
 function resolveTeacherId(
@@ -228,13 +252,41 @@ function resolveTeacherId(
   first: string,
   last: string,
 ): { id?: string; err?: string } {
-  const parts = normalizeNameKey(`${first} ${last}`);
-  if (!parts) return { err: "שם מורה חסר" };
-  const byParts = maps.byParts.get(parts);
-  if (byParts) return { id: byParts };
-  const byFull = maps.byFullName.get(parts);
-  if (byFull) return { id: byFull };
-  return { err: `מורה "${first} ${last}" לא נמצאה — הוסיפי אותה במסך מורות` };
+  const firstTrim = first.trim();
+  const lastTrim = last.trim();
+  if (!firstTrim && !lastTrim) {
+    return { err: "חובה להזין שם פרטי או שם משפחה של מורה (לפחות אחד)" };
+  }
+
+  const combined = normalizeNameKey(`${firstTrim} ${lastTrim}`);
+  if (combined) {
+    const byParts = maps.byParts.get(combined);
+    if (byParts) return { id: byParts };
+    const byFull = maps.byFullName.get(combined);
+    if (byFull) return { id: byFull };
+  }
+
+  if (firstTrim && !lastTrim) {
+    const ids = maps.byFirst.get(normalizeNameKey(firstTrim)) ?? [];
+    if (!ids.length) return { err: `מורה "${firstTrim}" לא נמצאה — הוסיפי אותה במסך מורות` };
+    if (ids.length > 1) {
+      return { err: `כמה מורות עם השם "${firstTrim}" — הוסיפי גם שם משפחה` };
+    }
+    return { id: ids[0] };
+  }
+
+  if (lastTrim && !firstTrim) {
+    const ids = maps.byLast.get(normalizeNameKey(lastTrim)) ?? [];
+    if (!ids.length) return { err: `מורה "${lastTrim}" לא נמצאה — הוסיפי אותה במסך מורות` };
+    if (ids.length > 1) {
+      return { err: `כמה מורות עם שם משפחה "${lastTrim}" — הוסיפי גם שם פרטי` };
+    }
+    return { id: ids[0] };
+  }
+
+  return {
+    err: `מורה "${firstTrim} ${lastTrim}" לא נמצאה — הוסיפי אותה במסך מורות`,
+  };
 }
 
 function targetFromRow(
@@ -305,8 +357,9 @@ export function validateAssignmentImportRows(
     const rowNumber = r.rowNumber ?? idx + 1;
     const errors: string[] = [];
 
-    if (!r.teacher_first_name.trim()) errors.push("שם פרטי מורה חסר");
-    if (!r.teacher_last_name.trim()) errors.push("שם משפחה מורה חסר");
+    if (!r.teacher_first_name.trim() && !r.teacher_last_name.trim()) {
+      errors.push("חובה להזין שם פרטי או שם משפחה של מורה (לפחות אחד)");
+    }
     const subjectLesson = normalizeSubjectLessonFields(r.subject, r.lesson_name);
     if (subjectLesson.error) errors.push(subjectLesson.error);
     if (!r.grade_level.trim()) errors.push("שכבה חסרה");
