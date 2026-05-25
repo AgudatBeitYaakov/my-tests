@@ -220,13 +220,17 @@ async function studentIdsForGradeAndSlice(
     return { ids: [...ids], error: null };
   }
 
-  if (slice.psychology_enabled) {
+  const hasClassOrTrack = slice.class_ids.length > 0 || slice.track_ids.length > 0;
+
+  // פסיכולוגיה לבד (בלי כיתה/מסלול) — מחזיר את כל תלמידות הפסיכולוגיה בשכבה
+  if (slice.psychology_enabled && !hasClassOrTrack && !slice.specialization_ids.length) {
     const { data, error } = await notDeleted(supabase.from("students").select("id"))
       .eq("academic_year_id", academicYearId)
       .eq("grade_level", gradeLevel)
       .eq("is_psychology", true);
     if (error) return { ids: [], error: error.message };
     for (const row of data ?? []) ids.add(row.id as string);
+    return { ids: [...ids], error: null };
   }
 
   for (const classId of slice.class_ids) {
@@ -266,6 +270,20 @@ async function studentIdsForGradeAndSlice(
       if (error) return { ids: [], error: error.message };
       for (const row of data ?? []) ids.add(row.id as string);
     }
+  }
+
+  // פסיכולוגיה כסינון: אם נבחרו גם כיתה/מסלול — מצמצמים את הקבוצה לרק
+  // תלמידות פסיכולוגיה מתוך מי שהתאימה לכיתה/מסלול שנבחרו.
+  if (slice.psychology_enabled && ids.size) {
+    const { data, error } = await notDeleted(
+      supabase.from("students").select("id"),
+    )
+      .eq("academic_year_id", academicYearId)
+      .eq("is_psychology", true)
+      .in("id", [...ids]);
+    if (error) return { ids: [], error: error.message };
+    const psychSet = new Set((data ?? []).map((r) => r.id as string));
+    return { ids: [...ids].filter((id) => psychSet.has(id)), error: null };
   }
 
   return { ids: [...ids], error: null };

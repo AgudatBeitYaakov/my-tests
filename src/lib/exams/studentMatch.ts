@@ -36,8 +36,13 @@ export async function fetchTeachingTrackIds(supabase: SupabaseClient): Promise<S
 }
 
 /**
- * בודק האם תלמידה מתאימה ליעד של מבחן — לפי אותה לוגיקה של
- * `fetchStudentIdsForMultiTarget` ב־assignments/multiTarget.ts (OR בין יעדים, AND על שכבה).
+ * בודק האם תלמידה מתאימה ליעד של מבחן.
+ * - שכבה: חובה להיות בתוך grade_levels
+ * - התמחות: התאמה לפי specialization_id או secondary_specialization_id
+ * - חובה: איחוד (OR) על כיתות/מסלולים; פסיכולוגיה משמשת כסינון:
+ *   • אם נבחרה רק פסיכולוגיה (בלי כיתה/מסלול) — רק תלמידות פסיכולוגיה
+ *   • אם נבחרו גם כיתה/מסלול וגם פסיכולוגיה — רק תלמידות פסיכולוגיה
+ *     מתוך אלו שמתאימות לכיתה/מסלול שנבחרו (AND)
  */
 export function studentMatchesExamTarget(
   student: StudentForMatch,
@@ -62,14 +67,27 @@ export function studentMatchesExamTarget(
 
   if (exam.applies_to_all_in_grade) return true;
 
-  if (exam.psychology_enabled && student.is_psychology) return true;
-  if (student.class_id && exam.class_ids.includes(student.class_id)) return true;
-  if (student.track_id && exam.track_ids.includes(student.track_id)) {
-    if (teachingTrackIds.has(student.track_id) && exam.teaching_track_type) {
-      return student.teaching_track_type === exam.teaching_track_type;
-    }
-    return true;
+  const hasClassOrTrack = exam.class_ids.length > 0 || exam.track_ids.length > 0;
+
+  if (exam.psychology_enabled && !hasClassOrTrack) {
+    return student.is_psychology;
   }
 
-  return false;
+  let matches = false;
+  if (student.class_id && exam.class_ids.includes(student.class_id)) {
+    matches = true;
+  }
+  if (!matches && student.track_id && exam.track_ids.includes(student.track_id)) {
+    if (teachingTrackIds.has(student.track_id) && exam.teaching_track_type) {
+      matches = student.teaching_track_type === exam.teaching_track_type;
+    } else {
+      matches = true;
+    }
+  }
+
+  if (!matches) return false;
+
+  if (exam.psychology_enabled && !student.is_psychology) return false;
+
+  return true;
 }
