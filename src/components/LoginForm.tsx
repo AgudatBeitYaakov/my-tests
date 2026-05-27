@@ -73,7 +73,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       >
         {loading ? "מתחברת…" : "התחברות"}
       </button>
-      <p className="text-center text-xs text-slate-500">התחברות ראשונה: admin + סיסמת APP_PASSWORD מההגדרות</p>
+      <p className="text-center text-xs text-slate-500"></p>
     </form>
   );
 }
