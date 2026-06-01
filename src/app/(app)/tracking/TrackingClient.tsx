@@ -10,6 +10,7 @@ import {
   ListTableToolbar,
   LIST_ROW_LINK_CLASS,
 } from "@/components/ui/ListPage";
+import { HebrewDatePicker } from "@/components/ui/HebrewDatePicker";
 import { HebrewDateTimePicker } from "@/components/ui/HebrewDateTimePicker";
 import { ListFilterBar, matchesNameQuery } from "@/components/ui/ListFilterBar";
 import { Spinner } from "@/components/ui/Spinner";
@@ -44,13 +45,18 @@ type Row = {
 };
 
 type SortKey = "exam_date" | "submission_due" | "grades_due" | "submitted_exam";
+type DateColumnKey = "exam_date" | "submission_due" | "grades_due" | "submitted_exam";
 
 function addDays(ymd: string, offset: number): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
-  const d = new Date(`${ymd}T00:00:00`);
+  // חישוב בשעות מקומיות כדי למנוע סחיפת אזור זמן
+  const d = new Date(Number(ymd.slice(0, 4)), Number(ymd.slice(5, 7)) - 1, Number(ymd.slice(8, 10)));
   if (Number.isNaN(d.getTime())) return null;
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function sortValue(row: Row, key: SortKey): string | null {
@@ -61,6 +67,23 @@ function sortValue(row: Row, key: SortKey): string | null {
   if (key === "submitted_exam") return row.submitted_exam;
   return null;
 }
+
+/** YMD ("YYYY-MM-DD") של הערך הרלוונטי לסינון לפי עמודת תאריך — או null אם אין */
+function dateColumnYmd(row: Row, key: DateColumnKey): string | null {
+  const examDate = row.exam?.exam_date ?? null;
+  if (key === "exam_date") return examDate;
+  if (key === "submission_due") return examDate ? addDays(examDate, EXAM_SUBMISSION_DUE_OFFSET) : null;
+  if (key === "grades_due") return examDate ? addDays(examDate, GRADES_SUBMISSION_DUE_OFFSET) : null;
+  if (key === "submitted_exam") return row.submitted_exam ? row.submitted_exam.slice(0, 10) : null;
+  return null;
+}
+
+const DATE_COLUMN_OPTIONS: { value: DateColumnKey; label: string }[] = [
+  { value: "exam_date", label: "תאריך מבחן" },
+  { value: "submission_due", label: "הגשת המבחן" },
+  { value: "grades_due", label: "הגשת ציונים" },
+  { value: "submitted_exam", label: "הוגש מבחן (בפועל)" },
+];
 
 function formatSubmittedDisplay(iso: string | null) {
   return formatTrackingDateTime(iso);
@@ -121,6 +144,9 @@ export function TrackingClient() {
   const [stageFilter, setStageFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>("exam_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [dateColumn, setDateColumn] = useState<DateColumnKey>("exam_date");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const deferredSearch = useDeferredValue(searchTerm);
 
   function toggleSort(key: SortKey) {
@@ -150,6 +176,12 @@ export function TrackingClient() {
         if (stageFilter === "pending-grades" && (row.grades_submitted || !row.submitted_exam))
           return false;
       }
+      if (dateFrom || dateTo) {
+        const ymd = dateColumnYmd(row, dateColumn);
+        if (!ymd) return false; // שורות בלי תאריך באותה עמודה — מוסתרות כשמפעילים סינון
+        if (dateFrom && ymd < dateFrom) return false;
+        if (dateTo && ymd > dateTo) return false;
+      }
       if (deferredSearch.trim()) {
         const matches = matchesNameQuery(deferredSearch, [
           row.exam?.teacher_name,
@@ -169,11 +201,11 @@ export function TrackingClient() {
       if (bv === null) return -1;
       return av < bv ? -1 * sign : 1 * sign;
     });
-  }, [allRows, deferredSearch, stageFilter, sortKey, sortDir]);
+  }, [allRows, deferredSearch, stageFilter, sortKey, sortDir, dateColumn, dateFrom, dateTo]);
 
   const totalCount = allRows.length;
   const count = filteredRows.length;
-  const isFiltering = Boolean(deferredSearch.trim() || stageFilter);
+  const isFiltering = Boolean(deferredSearch.trim() || stageFilter || dateFrom || dateTo);
 
   async function saveRow(
     id: string,
@@ -269,8 +301,57 @@ export function TrackingClient() {
             onClearAll={() => {
               setSearchTerm("");
               setStageFilter("");
+              setDateFrom("");
+              setDateTo("");
             }}
           />
+          <div className="border-t border-slate-200/70 px-4 py-3 dark:border-zinc-700/70 sm:px-5">
+            <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">סינון לפי תאריך</span>
+                <select
+                  value={dateColumn}
+                  onChange={(e) => setDateColumn(e.target.value as DateColumnKey)}
+                  className="mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400"
+                >
+                  {DATE_COLUMN_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <HebrewDatePicker
+                label="מתאריך"
+                value={dateFrom}
+                onChange={setDateFrom}
+              />
+              <HebrewDatePicker
+                label="עד תאריך"
+                value={dateTo}
+                onChange={setDateTo}
+              />
+              <div className="flex items-center gap-2">
+                {dateFrom || dateTo ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateFrom("");
+                      setDateTo("");
+                    }}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    נקה טווח
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {dateFrom && dateTo && dateFrom > dateTo ? (
+              <p className="mt-2 text-xs text-amber-700">
+                שימי לב — «מתאריך» מאוחר מ«עד תאריך». לא יוצגו תוצאות בטווח כזה.
+              </p>
+            ) : null}
+          </div>
         </ListDataCard>
 
         <ListDataCard enterDelay={0.09}>
