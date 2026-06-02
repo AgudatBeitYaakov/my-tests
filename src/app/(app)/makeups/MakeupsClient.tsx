@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, CheckCircle2, Pencil, UserRound } from "lucide-react";
+import { BookOpen, CheckCircle2, Pencil, Undo2, UserRound } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
@@ -109,6 +109,28 @@ export function MakeupsClient() {
     } finally {
       setCompleteBusy(false);
     }
+  }
+
+  async function undoMakeup(row: Row) {
+    const studentLabel = row.student
+      ? `${row.student.first_name} ${row.student.last_name}`.trim()
+      : "התלמידה";
+    const examLabel = row.exam?.subject ?? "המבחן";
+    const ok = confirm(
+      `לבטל את ההשלמה של ${studentLabel} במבחן ${examLabel}?\n\n` +
+        `פעולה זו תמחק לצמיתות את רשומת ההשלמה ואת רשומת המעקב, ` +
+        `ותחזיר את הסטטוס במבחן ל"נבחנה במועד" (כאילו הסימון "לא נבחנה" לא היה).`,
+    );
+    if (!ok) return;
+    const r = await fetch(withYearQuery(`/api/makeups/${row.id}/undo`, yearId), {
+      method: "POST",
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert((j as { error?: string }).error ?? "ביטול נכשל");
+      return;
+    }
+    await mutate();
   }
 
   return (
@@ -241,6 +263,17 @@ export function MakeupsClient() {
                         >
                           <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2} />
                           הושלם
+                        </button>
+                      ) : null}
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                          title="ביטול: התלמידה כן נבחנה במועד, סומנה בטעות. ימחק את ההשלמה ויחזיר את הסטטוס במבחן."
+                          onClick={() => void undoMakeup(m)}
+                        >
+                          <Undo2 className="size-3.5 shrink-0" strokeWidth={2} />
+                          ביטול
                         </button>
                       ) : null}
                     </div>

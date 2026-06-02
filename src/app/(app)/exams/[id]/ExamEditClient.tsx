@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil, Undo2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
@@ -120,6 +120,30 @@ export function ExamEditClient({ id }: { id: string }) {
       return;
     }
     await mutate();
+  }
+
+  async function undoMissing(lineId: string, studentLabel: string) {
+    const ok = confirm(
+      `לבטל את הסטטוס ולהחזיר את ${studentLabel} ל"נבחנה במועד"?\n\n` +
+        `פעולה זו תמחק לצמיתות את רשומת ההשלמה ואת רשומת המעקב הקשורות, ` +
+        `ותחזיר את התלמידה לסטטוס "נבחנה במועד".`,
+    );
+    if (!ok) return;
+    const r = await fetch(withYearQuery(`/api/exam-students/${lineId}/undo`, yearId), {
+      method: "POST",
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert((j as { error?: string }).error ?? "ביטול נכשל");
+      return;
+    }
+    await mutate();
+    const info = j as { deleted_makeups?: number; deleted_tracking?: number; unlocked_exam?: boolean };
+    const parts: string[] = ["הסטטוס הוחזר ל'נבחנה במועד'"];
+    if (info.deleted_makeups) parts.push(`נמחקה רשומת השלמה`);
+    if (info.deleted_tracking) parts.push(`נמחקה רשומת מעקב השלמה`);
+    if (info.unlocked_exam) parts.push(`המבחן נפתח שוב (לא נותרו השלמות)`);
+    alert(parts.join(" · "));
   }
 
   async function finishMakeups() {
@@ -387,6 +411,22 @@ export function ExamEditClient({ id }: { id: string }) {
                         >
                           הושלמה בהשלמה
                         </button>
+                        {row.status === "makeup" || row.status === "completed" || row.status === "missing" ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                            title="טעיתי — תחזירי את התלמידה ל'נבחנה במועד' ומחקי את ההשלמה"
+                            onClick={() =>
+                              void undoMissing(
+                                row.id,
+                                st ? `${st.first_name} ${st.last_name}`.trim() : "התלמידה",
+                              )
+                            }
+                          >
+                            <Undo2 className="size-3.5" strokeWidth={2} />
+                            ביטול טעות
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <span className="text-xs text-zinc-400">צפייה בלבד</span>
