@@ -9,6 +9,7 @@ import { CompleteMakeupDialog } from "@/components/makeup/CompleteMakeupDialog";
 import { ListDataCard, ListPageHeader, ListTableToolbar, LIST_ROW_LINK_CLASS } from "@/components/ui/ListPage";
 import { ListFilterBar, matchesNameQuery } from "@/components/ui/ListFilterBar";
 import { MakeupStatusBadge } from "@/components/ui/StatusBadge";
+import { NotesButton } from "@/components/ui/NotesButton";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
@@ -28,6 +29,7 @@ type Row = {
   created_at: string;
   completed_at: string | null;
   grade: number | null;
+  notes?: string | null;
   student: {
     first_name: string;
     last_name: string;
@@ -212,6 +214,7 @@ export function MakeupsClient() {
               <TableHead>סטטוס</TableHead>
               <TableHead>ציון</TableHead>
               <TableHead>תאריך השלמה</TableHead>
+              <TableHead>הערה</TableHead>
               <TableHead className="w-[1%] whitespace-nowrap" />
             </TableRow>
           </TableHeader>
@@ -231,6 +234,18 @@ export function MakeupsClient() {
                   <TableCell className="tabular-nums">{m.grade ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">
                     {formatCompleted(m.completed_at)}
+                  </TableCell>
+                  <TableCell className="max-w-[220px]">
+                    {m.notes && m.notes.trim() ? (
+                      <span
+                        className="line-clamp-2 cursor-help text-xs leading-snug text-amber-900 dark:text-amber-200"
+                        title={m.notes}
+                      >
+                        {m.notes}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-400">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex flex-wrap justify-end gap-1">
@@ -276,13 +291,22 @@ export function MakeupsClient() {
                           ביטול
                         </button>
                       ) : null}
+                      <NotesButton
+                        entity="makeups"
+                        id={m.id}
+                        compact
+                        label="הערה"
+                        modalTitle={`הערה — ${m.student ? `${m.student.first_name} ${m.student.last_name}`.trim() : "השלמה"}`}
+                        hasNote={Boolean(m.notes && m.notes.trim().length)}
+                        onSaved={() => void mutate()}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="py-14 text-center text-zinc-500">
+                <TableCell colSpan={9} className="py-14 text-center text-zinc-500">
                   {isLoading ? "טוען…" : isFiltering ? "אין תוצאות תואמות לסינון" : "אין השלמות פתוחות"}
                 </TableCell>
               </TableRow>

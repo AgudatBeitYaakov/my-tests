@@ -51,10 +51,34 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const examEnriched = { ...exam, target_label: labels[row.id] ?? "—" };
   const delete_preview = await previewExamHardDelete(supabase, id);
 
-  const { data: lines, error: lErr } = await supabase
-    .from("exam_students")
-    .select("id, status, updated_at, student_id")
-    .eq("exam_id", id);
+  // ננסה לטעון עם עמודת notes; אם היא עוד לא קיימת ב-DB (לפני הרצת
+  // supabase/PATCH_EXAM_STUDENTS_NOTES.sql) — ניפול חזרה לשליפה בלי notes.
+  type ExamStudentLineRow = {
+    id: string;
+    status: string;
+    updated_at: string;
+    student_id: string;
+    notes?: string | null;
+  };
+  let lines: ExamStudentLineRow[] | null = null;
+  let lErr: { message: string } | null = null;
+  {
+    const r = await supabase
+      .from("exam_students")
+      .select("id, status, updated_at, student_id, notes")
+      .eq("exam_id", id);
+    if (r.error && /notes|schema cache|column/i.test(r.error.message)) {
+      const fallback = await supabase
+        .from("exam_students")
+        .select("id, status, updated_at, student_id")
+        .eq("exam_id", id);
+      lines = (fallback.data as ExamStudentLineRow[]) ?? null;
+      lErr = fallback.error;
+    } else {
+      lines = (r.data as ExamStudentLineRow[]) ?? null;
+      lErr = r.error;
+    }
+  }
 
   if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
 

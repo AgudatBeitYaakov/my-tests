@@ -54,25 +54,9 @@ export async function assertValidExamStudentStatusTransition(
 
   if (error || !row) return { ok: false, error: "רשומה לא נמצאה" };
 
-  if (nextStatus === "took" && (row.status === "makeup" || row.status === "completed")) {
-    return { ok: false, error: "תלמידה כבר בהשלמה — לא ניתן לסמן כנבחנה במועד" };
-  }
-
-  if (nextStatus === "missing" && row.status === "took") {
-    return { ok: false, error: "תלמידה כבר נבחנה במועד" };
-  }
-
-  if (nextStatus === "took" && row.status === "completed") {
-    return { ok: false, error: "תלמידה כבר השלימה את המבחן" };
-  }
-
-  if (nextStatus === "missing" && row.status === "makeup") {
-    const dup = await assertNoOpenMakeupDuplicate(supabase, row.student_id as string, row.exam_id as string);
-    if (!dup.ok) return dup;
-  }
-
-  if (nextStatus === "makeup" && row.status === "completed") {
-    return { ok: false, error: "תלמידה כבר השלימה — לא ניתן להחזיר להשלמה" };
+  const validStatuses = ["pending", "took", "missing", "makeup", "completed"];
+  if (!validStatuses.includes(nextStatus)) {
+    return { ok: false, error: "סטטוס לא תקין" };
   }
 
   return { ok: true, error: null };

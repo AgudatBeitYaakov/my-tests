@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data: rows, error } = await supabase
     .from("makeup_exams")
-    .select("id, status, created_at, completed_at, grade, student_id, exam_id")
+    .select("id, status, created_at, completed_at, grade, student_id, exam_id, notes")
     .eq("academic_year_id", scope.year.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Undo2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
@@ -37,6 +37,7 @@ type Line = {
   id: string;
   status: ExamStudentStatus;
   student_id: string;
+  notes?: string | null;
   students: {
     first_name: string;
     last_name: string;
@@ -109,11 +110,29 @@ export function ExamEditClient({ id }: { id: string }) {
     fetcher,
   );
 
-  async function setStatus(lineId: string, status: ExamStudentStatus) {
+  async function setStatus(
+    lineId: string,
+    requestedStatus: ExamStudentStatus,
+    currentStatus: ExamStudentStatus,
+    studentLabel: string,
+  ) {
+    if (requestedStatus === currentStatus) return;
+
+    const movingAwayFromMakeup =
+      (currentStatus === "makeup" || currentStatus === "completed" || currentStatus === "missing") &&
+      (requestedStatus === "took" || requestedStatus === "pending");
+    if (movingAwayFromMakeup) {
+      const ok = confirm(
+        `לשנות את ${studentLabel} ל-"נבחנה במועד"?\n\n` +
+          `פעולה זו תמחק לצמיתות את רשומת ההשלמה ואת רשומת המעקב.`,
+      );
+      if (!ok) return;
+    }
+
     const r = await fetch(withYearQuery(`/api/exam-students/${lineId}`, yearId), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status: requestedStatus, force: true }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -121,30 +140,22 @@ export function ExamEditClient({ id }: { id: string }) {
       return;
     }
     await mutate();
-  }
 
-  async function undoMissing(lineId: string, studentLabel: string) {
-    const ok = confirm(
-      `לבטל את הסטטוס ולהחזיר את ${studentLabel} ל"נבחנה במועד"?\n\n` +
-        `פעולה זו תמחק לצמיתות את רשומת ההשלמה ואת רשומת המעקב הקשורות, ` +
-        `ותחזיר את התלמידה לסטטוס "נבחנה במועד".`,
-    );
-    if (!ok) return;
-    const r = await fetch(withYearQuery(`/api/exam-students/${lineId}/undo`, yearId), {
-      method: "POST",
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      alert((j as { error?: string }).error ?? "ביטול נכשל");
-      return;
+    const side = (j as {
+      side_effects?: {
+        deleted_makeups?: number;
+        deleted_tracking?: number;
+        upserted_makeup?: boolean;
+        unlocked_exam?: boolean;
+      };
+    }).side_effects;
+    if (side && (side.deleted_makeups || side.unlocked_exam)) {
+      const parts: string[] = [];
+      if (side.deleted_makeups) parts.push(`נמחקה רשומת השלמה`);
+      if (side.deleted_tracking) parts.push(`נמחקה רשומת מעקב`);
+      if (side.unlocked_exam) parts.push(`המבחן נפתח שוב`);
+      if (parts.length) alert(parts.join(" · "));
     }
-    await mutate();
-    const info = j as { deleted_makeups?: number; deleted_tracking?: number; unlocked_exam?: boolean };
-    const parts: string[] = ["הסטטוס הוחזר ל'נבחנה במועד'"];
-    if (info.deleted_makeups) parts.push(`נמחקה רשומת השלמה`);
-    if (info.deleted_tracking) parts.push(`נמחקה רשומת מעקב השלמה`);
-    if (info.unlocked_exam) parts.push(`המבחן נפתח שוב (לא נותרו השלמות)`);
-    alert(parts.join(" · "));
   }
 
   async function finishMakeups() {
@@ -225,7 +236,7 @@ export function ExamEditClient({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <NotesButton entity="exams" id={id} />
+          <NotesButton entity="exams" id={id} label="הערות על המבחן" modalTitle="הערות על המבחן" />
           <PrintButton label="רשימת תלמידות" />
           <ExportExcelButton
             label="תלמידות במבחן לאקסל"
@@ -346,6 +357,12 @@ export function ExamEditClient({ id }: { id: string }) {
         </p>
       ) : null}
 
+      <p className="rounded-lg border border-sky-200/80 bg-sky-50/80 px-3 py-2 text-sm text-sky-950 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-100">
+        <strong>הערה לכל תלמידה:</strong> עמודת &quot;הערה&quot; בטבלה + כפתור &quot;הערה לתלמידה&quot; בכל שורה.
+        {" "}
+        <strong>הערה על המבחן כולו</strong> (נפרדת) — כפתור למעלה: &quot;הערות על המבחן&quot;.
+      </p>
+
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900/40">
         <Table className="min-w-[960px]">
           <TableHeader>
@@ -359,6 +376,7 @@ export function ExamEditClient({ id }: { id: string }) {
               <TableHead>פסיכולוגיה</TableHead>
               <TableHead>סוג הוראה</TableHead>
               <TableHead>סטטוס</TableHead>
+              <TableHead>הערה</TableHead>
               <TableHead>פעולות</TableHead>
             </TableRow>
           </TableHeader>
@@ -392,50 +410,90 @@ export function ExamEditClient({ id }: { id: string }) {
                   <TableCell>
                     <ExamStudentStatusBadge status={row.status} />
                   </TableCell>
+                  <TableCell className="max-w-[220px]">
+                    {row.notes && row.notes.trim() ? (
+                      <span
+                        className="line-clamp-2 cursor-help text-xs leading-snug text-amber-900 dark:text-amber-200"
+                        title={row.notes}
+                      >
+                        {row.notes}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {!readOnly ? (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={locked}
-                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
-                          onClick={() => void setStatus(row.id, "took")}
-                        >
-                          נבחנה במועד
-                        </button>
-                        <button
-                          type="button"
-                          disabled={locked}
-                          className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 disabled:opacity-40"
-                          onClick={() => void setStatus(row.id, "missing")}
-                        >
-                          לא נבחנה
-                        </button>
-                        <button
-                          type="button"
-                          disabled={locked}
-                          className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-40"
-                          onClick={() => void setStatus(row.id, "completed")}
-                        >
-                          הושלמה בהשלמה
-                        </button>
-                        {row.status === "makeup" || row.status === "completed" || row.status === "missing" ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                            title="טעיתי — תחזירי את התלמידה ל'נבחנה במועד' ומחקי את ההשלמה"
-                            onClick={() =>
-                              void undoMissing(
-                                row.id,
-                                st ? `${st.first_name} ${st.last_name}`.trim() : "התלמידה",
-                              )
-                            }
-                          >
-                            <Undo2 className="size-3.5" strokeWidth={2} />
-                            ביטול טעות
-                          </button>
-                        ) : null}
-                      </div>
+                      (() => {
+                        const studentLabel = st
+                          ? `${st.first_name} ${st.last_name}`.trim()
+                          : "התלמידה";
+                        const isTook = row.status === "took";
+                        const isMakeupOpen = row.status === "makeup" || row.status === "missing";
+                        const isCompleted = row.status === "completed";
+
+                        const baseBtn =
+                          "rounded-md border px-2 py-1 text-xs font-medium transition disabled:opacity-40";
+                        const activeRing = "ring-2 ring-offset-1";
+                        return (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={locked}
+                              title={isTook ? "הסטטוס הנוכחי" : "סמני כנבחנה במועד"}
+                              className={[
+                                baseBtn,
+                                "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
+                                isTook ? `${activeRing} ring-emerald-400` : "",
+                              ].join(" ")}
+                              onClick={() =>
+                                void setStatus(row.id, "took", row.status, studentLabel)
+                              }
+                            >
+                              נבחנה במועד{isTook ? " ✓" : ""}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={locked}
+                              title={isMakeupOpen ? "הסטטוס הנוכחי" : "סמני כלא נבחנה / להשלמה"}
+                              className={[
+                                baseBtn,
+                                "border-red-200 bg-red-50 text-red-900 hover:bg-red-100",
+                                isMakeupOpen ? `${activeRing} ring-red-400` : "",
+                              ].join(" ")}
+                              onClick={() =>
+                                void setStatus(row.id, "missing", row.status, studentLabel)
+                              }
+                            >
+                              לא נבחנה{isMakeupOpen ? " ✓" : ""}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={locked}
+                              title={isCompleted ? "הסטטוס הנוכחי" : "סמני כהושלמה בהשלמה"}
+                              className={[
+                                baseBtn,
+                                "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
+                                isCompleted ? `${activeRing} ring-sky-400` : "",
+                              ].join(" ")}
+                              onClick={() =>
+                                void setStatus(row.id, "completed", row.status, studentLabel)
+                              }
+                            >
+                              הושלמה בהשלמה{isCompleted ? " ✓" : ""}
+                            </button>
+                            <NotesButton
+                              entity="exam-students"
+                              id={row.id}
+                              compact
+                              label="הערה לתלמידה"
+                              modalTitle={`הערה — ${studentLabel}`}
+                              hasNote={Boolean(row.notes && row.notes.trim().length)}
+                              onSaved={() => void mutate()}
+                            />
+                          </div>
+                        );
+                      })()
                     ) : (
                       <span className="text-xs text-zinc-400">צפייה בלבד</span>
                     )}
@@ -445,7 +503,7 @@ export function ExamEditClient({ id }: { id: string }) {
               })
             ) : (
               <TableRow>
-                <TableCell className="py-10 text-center text-zinc-500" colSpan={10}>
+                <TableCell className="py-10 text-center text-zinc-500" colSpan={11}>
                   אין תלמידות במבחן
                 </TableCell>
               </TableRow>
