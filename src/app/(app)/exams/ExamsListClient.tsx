@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, PenLine } from "lucide-react";
+import { CalendarPlus, PenLine, Users } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
@@ -107,7 +107,7 @@ export function ExamsListClient() {
     <div className="space-y-8">
       <ListPageHeader
         title="מבחנים"
-        subtitle="רשימת מבחנים וקישור לעדכון — ייצוא נפרד לרשימת מבחנים ולשורות תלמידות"
+        subtitle="לכל מבחן: תלמידות וסטטוסים, או עריכת פרטי המבחן — ייצוא נפרד לרשימת מבחנים ולשורות תלמידות"
         actions={
           <>
             <ExportExcelButton
@@ -217,7 +217,7 @@ export function ExamsListClient() {
               <TableHead>מקצוע</TableHead>
               <TableHead>תאריך</TableHead>
               <TableHead>יעד</TableHead>
-              <TableHead className="w-[1%] whitespace-nowrap" />
+              <TableHead className="w-[1%] whitespace-nowrap text-end">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -231,10 +231,18 @@ export function ExamsListClient() {
                     {e.target_label ?? "—"}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <Link href={`/exams/${e.id}`} className={LIST_ROW_LINK_CLASS}>
-                      <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                      למבחן
-                    </Link>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Link href={`/exams/${e.id}`} className={LIST_ROW_LINK_CLASS}>
+                        <Users className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                        תלמידות
+                      </Link>
+                      {!readOnly ? (
+                        <Link href={`/exams/${e.id}/edit`} className={LIST_ROW_LINK_CLASS}>
+                          <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                          עריכת מבחן
+                        </Link>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

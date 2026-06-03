@@ -93,7 +93,13 @@ const lineStatusHe: Record<string, string> = {
   completed: "הושלמה בהשלמה",
 };
 
-export function ExamEditClient({ id }: { id: string }) {
+export function ExamEditClient({
+  id,
+  view = "students",
+}: {
+  id: string;
+  view?: "students" | "edit";
+}) {
   const router = useRouter();
   const { viewingYear, readOnly } = useAcademicYear();
   const yearId = viewingYear?.id;
@@ -223,11 +229,85 @@ export function ExamEditClient({ id }: { id: string }) {
         .join("\n")
     : "מחיקה קשה — כל הנתונים הקשורים למבחן יימחקו לצמיתות.";
 
+  const examEditForm =
+    !readOnly ? (
+      <ExamEditDialog
+        inline
+        examId={id}
+        locked={locked}
+        onSaved={(summary: SaveSummary | null) => {
+          if (summary) {
+            const parts: string[] = [];
+            if (summary.added) parts.push(`נוספו ${summary.added} תלמידות`);
+            if (summary.removedExamStudents) parts.push(`הוסרו ${summary.removedExamStudents}`);
+            if (summary.removedMakeups) parts.push(`נמחקו ${summary.removedMakeups} השלמות`);
+            if (summary.removedTracking) parts.push(`נמחקו ${summary.removedTracking} רשומות מעקב`);
+            const tc = summary.teacherCascade;
+            if (tc) {
+              if (tc.assignment_updated) parts.push("השיבוץ-המקור עודכן");
+              if (tc.exams_updated) parts.push(`עודכנו ${tc.exams_updated} מבחנים אחים`);
+              if (tc.snapshots_updated) parts.push(`עודכנו ${tc.snapshots_updated} שורות תלמידות`);
+            }
+            if (parts.length) alert(`המבחן עודכן: ${parts.join(" · ")}`);
+          }
+          void mutate();
+        }}
+        initial={{
+          exam_date: e.exam_date,
+          assignment_category: e.assignment_category,
+          grade_levels: e.grade_levels ?? [],
+          class_ids: e.class_ids ?? [],
+          track_ids: e.track_ids ?? [],
+          specialization_ids: e.specialization_ids ?? [],
+          psychology_enabled: Boolean(e.psychology_enabled),
+          applies_to_all_in_grade: Boolean(e.applies_to_all_in_grade),
+          teaching_track_type: e.teaching_track_type ?? null,
+          teacher_id: e.teacher_id ?? "",
+        }}
+      />
+    ) : null;
+
+  if (view === "edit") {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">עריכת מבחן</p>
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-zinc-50">{e.subject}</h1>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              {formatHebrewDateFromYmd(e.exam_date)} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
+              {e.target_label ?? "—"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <NotesButton entity="exams" id={id} label="הערות על המבחן" modalTitle="הערות על המבחן" />
+            <Link
+              href={`/exams/${id}`}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+            >
+              תלמידות במבחן
+            </Link>
+            <Link href="/exams" className="rounded-lg border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800">
+              חזרה לרשימה
+            </Link>
+          </div>
+        </div>
+        {readOnly ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            שנת לימודים בארכיון — צפייה בלבד, לא ניתן לערוך.
+          </p>
+        ) : (
+          examEditForm
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">מבחן</p>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">מבחן · תלמידות</p>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-zinc-50">{e.subject}</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             {formatHebrewDateFromYmd(e.exam_date)} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
@@ -236,6 +316,14 @@ export function ExamEditClient({ id }: { id: string }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <NotesButton entity="exams" id={id} label="הערות על המבחן" modalTitle="הערות על המבחן" />
+          {!readOnly ? (
+            <Link
+              href={`/exams/${id}/edit`}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50"
+            >
+              עריכת מבחן
+            </Link>
+          ) : null}
           <PrintButton label="רשימת תלמידות" />
           <ExportExcelButton
             label="תלמידות במבחן לאקסל"
@@ -270,47 +358,10 @@ export function ExamEditClient({ id }: { id: string }) {
             </button>
           ) : null}
           <Link href="/exams" className="rounded-lg border border-zinc-900 bg-zinc-900 px-3 py-2 text-sm text-white hover:bg-zinc-800">
-            חזרה
+            חזרה לרשימה
           </Link>
         </div>
       </div>
-
-      {!readOnly ? (
-        <ExamEditDialog
-          inline
-          examId={id}
-          locked={locked}
-          onSaved={(summary: SaveSummary | null) => {
-            if (summary) {
-              const parts: string[] = [];
-              if (summary.added) parts.push(`נוספו ${summary.added} תלמידות`);
-              if (summary.removedExamStudents) parts.push(`הוסרו ${summary.removedExamStudents}`);
-              if (summary.removedMakeups) parts.push(`נמחקו ${summary.removedMakeups} השלמות`);
-              if (summary.removedTracking) parts.push(`נמחקו ${summary.removedTracking} רשומות מעקב`);
-              const tc = summary.teacherCascade;
-              if (tc) {
-                if (tc.assignment_updated) parts.push("השיבוץ-המקור עודכן");
-                if (tc.exams_updated) parts.push(`עודכנו ${tc.exams_updated} מבחנים אחים`);
-                if (tc.snapshots_updated) parts.push(`עודכנו ${tc.snapshots_updated} שורות תלמידות`);
-              }
-              if (parts.length) alert(`המבחן עודכן: ${parts.join(" · ")}`);
-            }
-            void mutate();
-          }}
-          initial={{
-            exam_date: e.exam_date,
-            assignment_category: e.assignment_category,
-            grade_levels: e.grade_levels ?? [],
-            class_ids: e.class_ids ?? [],
-            track_ids: e.track_ids ?? [],
-            specialization_ids: e.specialization_ids ?? [],
-            psychology_enabled: Boolean(e.psychology_enabled),
-            applies_to_all_in_grade: Boolean(e.applies_to_all_in_grade),
-            teaching_track_type: e.teaching_track_type ?? null,
-            teacher_id: e.teacher_id ?? "",
-          }}
-        />
-      ) : null}
 
       <ConfirmDangerDialog
         open={deleteOpen}
