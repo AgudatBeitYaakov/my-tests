@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
@@ -100,7 +99,6 @@ export function ExamEditClient({ id }: { id: string }) {
   const yearId = viewingYear?.id;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const { data, error, isLoading, mutate } = useSWR<{
     exam: Exam;
     exam_students: Line[];
@@ -229,9 +227,10 @@ export function ExamEditClient({ id }: { id: string }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">עדכון מבחן</h1>
-          <p className="mt-1 text-sm text-zinc-600">
-            {e.subject} · {formatHebrewDateFromYmd(e.exam_date)} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">מבחן</p>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-zinc-50">{e.subject}</h1>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {formatHebrewDateFromYmd(e.exam_date)} · {teacherEmbedDisplayName(e.teachers)} · יעד:{" "}
             {e.target_label ?? "—"}
           </p>
         </div>
@@ -251,16 +250,6 @@ export function ExamEditClient({ id }: { id: string }) {
               }))
             }
           />
-          {!readOnly ? (
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-900 hover:bg-sky-100 dark:border-sky-700/40 dark:bg-sky-950/30 dark:text-sky-100"
-            >
-              <Pencil className="size-3.5" strokeWidth={2} />
-              עריכת תאריך / יעד
-            </button>
-          ) : null}
           {!readOnly ? (
             <button
               type="button"
@@ -286,13 +275,12 @@ export function ExamEditClient({ id }: { id: string }) {
         </div>
       </div>
 
-      {editOpen ? (
+      {!readOnly ? (
         <ExamEditDialog
+          inline
           examId={id}
           locked={locked}
-          onClose={() => setEditOpen(false)}
           onSaved={(summary: SaveSummary | null) => {
-            setEditOpen(false);
             if (summary) {
               const parts: string[] = [];
               if (summary.added) parts.push(`נוספו ${summary.added} תלמידות`);

@@ -233,7 +233,7 @@ export function ExamsListClient() {
                   <TableCell className="whitespace-nowrap">
                     <Link href={`/exams/${e.id}`} className={LIST_ROW_LINK_CLASS}>
                       <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                      עדכון מבחן
+                      למבחן
                     </Link>
                   </TableCell>
                 </TableRow>

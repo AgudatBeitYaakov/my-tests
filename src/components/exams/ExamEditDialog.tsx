@@ -25,7 +25,9 @@ type LookupItem = { id: string; name: string };
 
 type Props = {
   examId: string;
-  onClose: () => void;
+  /** כרטיס קבוע בדף המבחן (לא חלון קופץ) */
+  inline?: boolean;
+  onClose?: () => void;
   onSaved: (summary: SaveSummary | null) => void;
   initial: {
     exam_date: string;
@@ -66,7 +68,14 @@ function toggleId(ids: string[], id: string): string[] {
 const chipClass =
   "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800";
 
-export function ExamEditDialog({ examId, onClose, onSaved, initial, locked }: Props) {
+export function ExamEditDialog({
+  examId,
+  inline = false,
+  onClose,
+  onSaved,
+  initial,
+  locked,
+}: Props) {
   const { viewingYear } = useAcademicYear();
   const yearId = viewingYear?.id;
 
@@ -177,23 +186,9 @@ export function ExamEditDialog({ examId, onClose, onSaved, initial, locked }: Pr
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="presentation">
-      <button
-        type="button"
-        className="absolute inset-0 bg-black/50"
-        aria-label="סגירה"
-        onClick={() => !busy && onClose()}
-      />
-      <div className="relative z-[101] flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-        <div className="border-b border-slate-200 p-4 dark:border-zinc-700">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-zinc-50">עריכת מבחן</h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-            עדכון תאריך ויעד · שורות תלמידות יסונכרנו אוטומטית (יתווספו/יוסרו ובהתאם גם השלמות ומעקב)
-          </p>
-        </div>
-
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
+  const formBody = (
+    <>
+        <div className={inline ? "space-y-5" : "flex-1 space-y-5 overflow-y-auto p-4"}>
           {locked ? (
             <InlineNotice tone="warning">
               המבחן ננעל להשלמות — ניתן לעדכן רק את התאריך.
@@ -376,15 +371,23 @@ export function ExamEditDialog({ examId, onClose, onSaved, initial, locked }: Pr
           {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-200 p-4 dark:border-zinc-700">
-          <button
-            type="button"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-            disabled={busy}
-            onClick={onClose}
-          >
-            ביטול
-          </button>
+        <div
+          className={
+            inline
+              ? "flex items-center justify-end gap-2 border-t border-slate-200 pt-4 dark:border-zinc-700"
+              : "flex items-center justify-end gap-2 border-t border-slate-200 p-4 dark:border-zinc-700"
+          }
+        >
+          {!inline && onClose ? (
+            <button
+              type="button"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              disabled={busy}
+              onClick={onClose}
+            >
+              ביטול
+            </button>
+          ) : null}
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-50"
@@ -392,11 +395,13 @@ export function ExamEditDialog({ examId, onClose, onSaved, initial, locked }: Pr
             onClick={() => void save()}
           >
             {busy ? <Spinner className="size-4" /> : null}
-            {busy ? "שומר…" : "שמירה"}
+            {busy ? "שומר…" : "שמירת שינויים"}
           </button>
         </div>
-      </div>
+    </>
+  );
 
+  const teachingPicker = (
       <TeachingModePickerDialog
         open={teachingDialogOpen}
         initial={teachingMode}
@@ -415,6 +420,43 @@ export function ExamEditDialog({ examId, onClose, onSaved, initial, locked }: Pr
           }
         }}
       />
-    </div>
+  );
+
+  if (inline) {
+    return (
+      <section className="rounded-xl border border-sky-200/80 bg-gradient-to-b from-sky-50/50 to-white p-5 shadow-sm dark:border-sky-800/40 dark:from-sky-950/20 dark:to-zinc-900/40">
+        <div className="mb-4 border-b border-sky-100 pb-4 dark:border-sky-900/50">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-zinc-50">עריכת המבחן</h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
+            ניתן לערוך כאן: <strong>תאריך מבחן</strong>, <strong>מורה אחראית</strong>,{" "}
+            <strong>יעד</strong> (שכבות · כיתות · מסלולים · התמחויות).
+            {locked ? " המבחן ננעל — ניתן לעדכן רק תאריך ומורה." : " שינוי יעד מסנכרן את רשימת התלמידות."}
+          </p>
+        </div>
+        {formBody}
+        {teachingPicker}
+      </section>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="presentation">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="סגירה"
+        onClick={() => !busy && onClose?.()}
+      />
+      <div className="relative z-[101] flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="border-b border-slate-200 p-4 dark:border-zinc-700">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-zinc-50">עריכת מבחן</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+            עדכון תאריך ויעד · שורות תלמידות יסונכרנו אוטומטית
+          </p>
+        </div>
+        {formBody}
+        {teachingPicker}
+      </div>
+    );
   );
 }
