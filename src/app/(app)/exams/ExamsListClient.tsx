@@ -10,7 +10,6 @@ import {
   ListPageHeader,
   ListTableToolbar,
   LIST_PRIMARY_LINK_CLASS,
-  LIST_ROW_LINK_CLASS,
 } from "@/components/ui/ListPage";
 import { ListFilterBar, matchesNameQuery } from "@/components/ui/ListFilterBar";
 import { Spinner } from "@/components/ui/Spinner";
@@ -232,20 +231,22 @@ export function ExamsListClient() {
                     {e.target_label ?? "—"}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <div className="flex flex-wrap justify-end gap-1">
+                    <div className="flex flex-wrap justify-end gap-1.5">
                       <Link
                         href={`/exams/${e.id}`}
-                        className={`${LIST_ROW_LINK_CLASS} ${interactiveCursor.student}`}
+                        title="תלמידות וסטטוסים במבחן"
+                        className={`inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-900 transition hover:bg-sky-100 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50 ${interactiveCursor.student}`}
                       >
-                        <Users className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                        <Users className="size-3.5 shrink-0 opacity-90" strokeWidth={2} />
                         תלמידות
                       </Link>
                       {!readOnly ? (
                         <Link
                           href={`/exams/${e.id}/edit`}
-                          className={`${LIST_ROW_LINK_CLASS} ${interactiveCursor.edit}`}
+                          title="תאריך, מורה, יעד ושכבות"
+                          className={`inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/50 ${interactiveCursor.edit}`}
                         >
-                          <PenLine className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                          <PenLine className="size-3.5 shrink-0 opacity-90" strokeWidth={2} />
                           עריכת מבחן
                         </Link>
                       ) : null}

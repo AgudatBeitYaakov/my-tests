@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
 
 import { formatHebrewDateFromYmd } from "@/lib/hebrewDate";
-import { interactiveCursor } from "@/lib/ui/interactiveCursor";
+import { cursorClassForHref, interactiveCursor } from "@/lib/ui/interactiveCursor";
 import { apiFetcher } from "@/lib/api/fetcher";
 
 type Item = {
@@ -80,7 +80,10 @@ function StatCard({
 
   if (href) {
     return (
-      <Link href={href} className="block outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-2xl">
+      <Link
+        href={href}
+        className={`block outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-2xl ${cursorClassForHref(href)}`}
+      >
         {inner}
       </Link>
     );
@@ -273,7 +276,7 @@ export function DashboardClient() {
               <Link
                 key={l.href}
                 href={l.href}
-                className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-zinc-700/70 dark:bg-zinc-950/20 dark:text-zinc-100 dark:hover:bg-white/5"
+                className={`rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:border-zinc-300 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-zinc-700/70 dark:bg-zinc-950/20 dark:text-zinc-100 dark:hover:bg-white/5 ${cursorClassForHref(l.href)}`}
               >
                 {l.label}
               </Link>

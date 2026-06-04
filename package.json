@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:cursor": "cmd /c \"\"C:\\Users\\לבורנטית\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\node.exe\" \"node_modules\\next\\dist\\bin\\next\" dev\"",
-    "dev:cursor:insecure": "cmd /c \"set NODE_TLS_REJECT_UNAUTHORIZED=0 && \"\"C:\\Users\\לבורנטית\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\node.exe\"\" \"\"node_modules\\next\\dist\\bin\\next\"\" dev\"",
+    "dev": "next dev --webpack",
+    "dev:cursor": "cmd /c \"\"C:\\Users\\לבורנטית\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\node.exe\" \"node_modules\\next\\dist\\bin\\next\" dev --webpack\"",
+    "dev:cursor:insecure": "cmd /c \"set NODE_TLS_REJECT_UNAUTHORIZED=0 && \"\"C:\\Users\\לבורנטית\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\node.exe\"\" \"\"node_modules\\next\\dist\\bin\\next\"\" dev --webpack\"",
     "build": "next build",
     "build:cursor": "cmd /c \"\"C:\\Users\\לבורנטית\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\node.exe\" \"node_modules\\next\\dist\\bin\\next\" build\"",
     "start": "next start",

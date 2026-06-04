@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ENTITY_LABELS, LOOKUP_ENTITIES } from "@/lib/lookups/entities";
+import { interactiveCursor } from "@/lib/ui/interactiveCursor";
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,7 +12,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
             <Link
               key={slug}
               href={`/settings/${slug}`}
-              className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-800 hover:border-violet-300 hover:bg-violet-50"
+              className={`rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm text-zinc-800 hover:border-violet-300 hover:bg-violet-50 ${interactiveCursor.settings}`}
             >
               {ENTITY_LABELS[slug]}
             </Link>

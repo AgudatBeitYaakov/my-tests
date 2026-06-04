@@ -267,7 +267,7 @@ export function MakeupsClient() {
                       {!readOnly ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium"
+                          className={`inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium ${interactiveCursor.edit}`}
                           onClick={() => {
                             setEditGradeId(m.id);
                             setEditGradeValue(m.grade != null ? String(m.grade) : "");
@@ -280,7 +280,7 @@ export function MakeupsClient() {
                       {!readOnly && m.status === "open" ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium"
+                          className={`inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium ${interactiveCursor.check}`}
                           onClick={() => setCompleteId(m.id)}
                         >
                           <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2} />
@@ -290,7 +290,7 @@ export function MakeupsClient() {
                       {!readOnly ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                          className={`inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 ${interactiveCursor.makeup}`}
                           title="ביטול: התלמידה כן נבחנה במועד, סומנה בטעות. ימחק את ההשלמה ויחזיר את הסטטוס במבחן."
                           onClick={() => void undoMakeup(m)}
                         >

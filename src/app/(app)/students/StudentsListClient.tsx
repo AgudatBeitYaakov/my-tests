@@ -10,7 +10,7 @@ import {
   ListTableToolbar,
   LIST_PRIMARY_LINK_CLASS,
   LIST_ROW_LINK_CLASS,
-  LIST_SECONDARY_LINK_CLASS,
+  LIST_IMPORT_LINK_CLASS,
 } from "@/components/ui/ListPage";
 import { ListFilterBar } from "@/components/ui/ListFilterBar";
 import { Spinner } from "@/components/ui/Spinner";
@@ -85,7 +85,7 @@ export function StudentsListClient() {
             />
             {!readOnly ? (
               <>
-                <Link href="/students/import" className={LIST_SECONDARY_LINK_CLASS}>
+                <Link href="/students/import" className={LIST_IMPORT_LINK_CLASS}>
                   <Upload className="size-4 shrink-0" strokeWidth={2} />
                   ייבוא מאקסל
                 </Link>

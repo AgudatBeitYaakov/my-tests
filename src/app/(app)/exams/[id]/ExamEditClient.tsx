@@ -356,7 +356,7 @@ export function ExamEditClient({
             <button
               type="button"
               onClick={() => setDeleteOpen(true)}
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100"
+              className={`rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100 ${interactiveCursor.delete}`}
             >
               מחק מבחן
             </button>
@@ -483,6 +483,7 @@ export function ExamEditClient({
                               title={isTook ? "הסטטוס הנוכחי" : "סמני כנבחנה במועד"}
                               className={[
                                 baseBtn,
+                                interactiveCursor.check,
                                 "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
                                 isTook ? `${activeRing} ring-emerald-400` : "",
                               ].join(" ")}
@@ -498,6 +499,7 @@ export function ExamEditClient({
                               title={isMakeupOpen ? "הסטטוס הנוכחי" : "סמני כלא נבחנה / להשלמה"}
                               className={[
                                 baseBtn,
+                                interactiveCursor.makeup,
                                 "border-red-200 bg-red-50 text-red-900 hover:bg-red-100",
                                 isMakeupOpen ? `${activeRing} ring-red-400` : "",
                               ].join(" ")}
@@ -513,6 +515,7 @@ export function ExamEditClient({
                               title={isCompleted ? "הסטטוס הנוכחי" : "סמני כהושלמה בהשלמה"}
                               className={[
                                 baseBtn,
+                                interactiveCursor.makeup,
                                 "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100",
                                 isCompleted ? `${activeRing} ring-sky-400` : "",
                               ].join(" ")}
