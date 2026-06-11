@@ -290,13 +290,31 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
     }
 
     if (kind === "makeups") {
-      const data = await paginateSelect((from, to) =>
-        supabase
-          .from("makeup_exams")
-          .select("id, status, created_at, completed_at, student_id, exam_id")
-          .order("created_at", { ascending: false })
-          .range(from, to),
-      );
+      let data: Awaited<ReturnType<typeof paginateSelect>>;
+      try {
+        data = await paginateSelect((from, to) =>
+          supabase
+            .from("makeup_exams")
+            .select(
+              "id, status, created_at, completed_at, student_id, exam_id, auto_registered",
+            )
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/auto_registered/i.test(msg)) {
+          data = await paginateSelect((from, to) =>
+            supabase
+              .from("makeup_exams")
+              .select("id, status, created_at, completed_at, student_id, exam_id")
+              .order("created_at", { ascending: false })
+              .range(from, to),
+          );
+        } else {
+          throw err;
+        }
+      }
       const studentIds = [...new Set(data.map((r) => (r as { student_id: string }).student_id))];
       const examIds = [...new Set(data.map((r) => (r as { exam_id: string }).exam_id))];
       const studentsBy: Record<string, { first_name: string; last_name: string; tz: string }> = {};
@@ -325,11 +343,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           completed_at: string | null;
           student_id: string;
           exam_id: string;
+          auto_registered?: boolean;
         };
         const st = studentsBy[row.student_id];
         const ex = examsBy[row.exam_id];
         return {
           סטטוס: makeupStatusHe[row.status] ?? row.status,
+          נרשמה_להשלמה: row.auto_registered ? "כן" : "לא",
           נוצר: row.created_at?.slice(0, 19) ?? "",
           הושלם: row.completed_at?.slice(0, 19) ?? "",
           שם_פרטי: st?.first_name ?? "",

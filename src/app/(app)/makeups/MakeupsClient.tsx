@@ -30,6 +30,7 @@ type Row = {
   completed_at: string | null;
   grade: number | null;
   notes?: string | null;
+  auto_registered: boolean;
   student: {
     first_name: string;
     last_name: string;
@@ -38,6 +39,49 @@ type Row = {
   } | null;
   exam: { subject: string; exam_date: string; teacher_name: string | null } | null;
 };
+
+function RegisteredForMakeupCell({
+  value,
+  readOnly,
+  busy,
+  onToggle,
+}: {
+  value: boolean;
+  readOnly: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const label = value ? "כן" : "לא";
+  const badgeClass = value
+    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+    : "border-slate-200 bg-slate-50 text-slate-600";
+
+  if (readOnly) {
+    return (
+      <span
+        className={`inline-flex min-w-[3rem] items-center justify-center rounded-lg border px-2.5 py-1 text-xs font-semibold ${badgeClass}`}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
+      title="לחיצה לשינוי — נרשמה להשלמה"
+      className={`inline-flex min-w-[3rem] items-center justify-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-sm transition hover:brightness-95 active:scale-[0.98] disabled:opacity-60 ${badgeClass}`}
+    >
+      {busy ? <Spinner className="size-3" /> : label}
+    </button>
+  );
+}
 
 function formatCompleted(iso: string | null) {
   if (!iso) return "—";
@@ -68,6 +112,8 @@ export function MakeupsClient() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
   const [gradeFilter, setGradeFilter] = useState("");
+  const [autoRegisteredFilter, setAutoRegisteredFilter] = useState("");
+  const [autoRegisteredBusyId, setAutoRegisteredBusyId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(searchTerm);
 
   const allRows = data?.makeups ?? [];
@@ -75,6 +121,8 @@ export function MakeupsClient() {
     return allRows.filter((m) => {
       if (statusFilter && m.status !== statusFilter) return false;
       if (gradeFilter && (m.student?.grade_level ?? "") !== gradeFilter) return false;
+      if (autoRegisteredFilter === "yes" && !m.auto_registered) return false;
+      if (autoRegisteredFilter === "no" && m.auto_registered) return false;
       if (deferredSearch.trim()) {
         const matches = matchesNameQuery(deferredSearch, [
           m.student?.first_name,
@@ -87,11 +135,65 @@ export function MakeupsClient() {
       }
       return true;
     });
-  }, [allRows, deferredSearch, statusFilter, gradeFilter]);
+  }, [allRows, deferredSearch, statusFilter, gradeFilter, autoRegisteredFilter]);
 
   const totalCount = allRows.length;
   const count = filteredRows.length;
-  const isFiltering = Boolean(deferredSearch.trim() || statusFilter !== "open" || gradeFilter);
+  const isFiltering = Boolean(
+    deferredSearch.trim() || statusFilter !== "open" || gradeFilter || autoRegisteredFilter,
+  );
+
+  async function toggleAutoRegistered(row: Row) {
+    if (readOnly || autoRegisteredBusyId) return;
+    const next = !row.auto_registered;
+    setAutoRegisteredBusyId(row.id);
+
+    void mutate(
+      (current) =>
+        current
+          ? {
+              ...current,
+              makeups: current.makeups.map((m) =>
+                m.id === row.id ? { ...m, auto_registered: next } : m,
+              ),
+            }
+          : current,
+      { revalidate: false },
+    );
+
+    try {
+      const r = await fetch(withYearQuery(`/api/makeups/${row.id}`, yearId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auto_registered: next }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        makeup?: { auto_registered?: boolean };
+      };
+      if (!r.ok) {
+        void mutate();
+        throw new Error(j.error ?? "עדכון נכשל");
+      }
+      const saved = Boolean(j.makeup?.auto_registered);
+      void mutate(
+        (current) =>
+          current
+            ? {
+                ...current,
+                makeups: current.makeups.map((m) =>
+                  m.id === row.id ? { ...m, auto_registered: saved } : m,
+                ),
+              }
+            : current,
+        { revalidate: true },
+      );
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setAutoRegisteredBusyId(null);
+    }
+  }
 
   async function completeSave(payload: { completed_at: string; notes: string }) {
     if (!completeId) return;
@@ -179,12 +281,23 @@ export function MakeupsClient() {
                 { value: "ג", label: "ג" },
               ],
             },
+            {
+              id: "auto_registered",
+              label: "נרשמה להשלמה",
+              value: autoRegisteredFilter,
+              onChange: setAutoRegisteredFilter,
+              options: [
+                { value: "yes", label: "כן — נרשמה להשלמה" },
+                { value: "no", label: "לא — לא נרשמה" },
+              ],
+            },
           ]}
           isAnyActive={isFiltering}
           onClearAll={() => {
             setSearchTerm("");
             setStatusFilter("open");
             setGradeFilter("");
+            setAutoRegisteredFilter("");
           }}
         />
       </ListDataCard>
@@ -212,6 +325,7 @@ export function MakeupsClient() {
               <TableHead>תאריך מבחן</TableHead>
               <TableHead>מורה</TableHead>
               <TableHead>סטטוס</TableHead>
+              <TableHead className="whitespace-nowrap">נרשמה להשלמה</TableHead>
               <TableHead>ציון</TableHead>
               <TableHead>תאריך השלמה</TableHead>
               <TableHead>הערה</TableHead>
@@ -230,6 +344,14 @@ export function MakeupsClient() {
                   <TableCell>{m.exam?.teacher_name ?? "—"}</TableCell>
                   <TableCell>
                     <MakeupStatusBadge status={m.status as "open" | "completed"} />
+                  </TableCell>
+                  <TableCell>
+                    <RegisteredForMakeupCell
+                      value={Boolean(m.auto_registered)}
+                      readOnly={readOnly}
+                      busy={autoRegisteredBusyId === m.id}
+                      onToggle={() => void toggleAutoRegistered(m)}
+                    />
                   </TableCell>
                   <TableCell className="tabular-nums">{m.grade ?? "—"}</TableCell>
                   <TableCell className="whitespace-nowrap tabular-nums">
@@ -312,7 +434,7 @@ export function MakeupsClient() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={9} className="py-14 text-center text-zinc-500">
+                <TableCell colSpan={10} className="py-14 text-center text-zinc-500">
                   {isLoading ? "טוען…" : isFiltering ? "אין תוצאות תואמות לסינון" : "אין השלמות פתוחות"}
                 </TableCell>
               </TableRow>

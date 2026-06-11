@@ -14,6 +14,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     grade?: number | string | null;
     notes?: string | null;
     completed_at?: string | null;
+    auto_registered?: boolean;
   };
 
   const supabase = createSupabaseAdminClient();
@@ -40,6 +41,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const patch: Record<string, unknown> = {};
 
   if (body.notes !== undefined) patch.notes = body.notes?.trim() || null;
+  if (body.auto_registered !== undefined) patch.auto_registered = Boolean(body.auto_registered);
 
   if (body.completed_at !== undefined) {
     if (!body.completed_at) {
@@ -70,12 +72,34 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "אין שדות לעדכון" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("makeup_exams")
     .update(patch)
     .eq("id", id)
     .select("*")
     .single();
+
+  if (error && "auto_registered" in patch && /auto_registered/i.test(error.message)) {
+    const withoutAuto = { ...patch };
+    delete withoutAuto.auto_registered;
+    if (!Object.keys(withoutAuto).length) {
+      return NextResponse.json(
+        {
+          error:
+            "העמודה «נרשמה להשלמה» עוד לא קיימת במסד. הריצי את supabase/PATCH_MAKEUP_AUTO_REGISTERED.sql ב-Supabase.",
+        },
+        { status: 400 },
+      );
+    }
+    const retry = await supabase
+      .from("makeup_exams")
+      .update(withoutAuto)
+      .eq("id", id)
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
