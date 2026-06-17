@@ -12,19 +12,15 @@ export type MakeupPrintRow = {
 };
 
 /**
- * פריסת דף מדבקות — 3×8 (24 מדבקות לדף A4).
- * המידות מחושבות כך ש-8 שורות × 3 עמודות + שוליים = בדיוק 210×297 מ"מ,
- * כדי שלא «ייפול» תוכן לעמוד נוסף (כמו תבנית דיוור ב-Word).
- * תואם גיליונות Avery L7163 / Word «24 מדבקות» (בערך 63.5×34.6 מ"מ בפועל על A4).
+ * פריסת דף מדבקות — 3×11 (33 מדבקות לדף A4).
+ * שוליים: 0.5 ס"מ (5 מ"מ) למעלה ולמטה בלבד; ללא שוליים צדדיים — 3 עמודות שוות על כל רוחב הדף.
  */
 const PAGE_W = 210;
 const PAGE_H = 297;
-const MARGIN_TOP = 10;
-const MARGIN_BOTTOM = 10;
-const MARGIN_LEFT = 7;
-const MARGIN_RIGHT = 7;
+const MARGIN_TOP = 5;
+const MARGIN_BOTTOM = 5;
 const COLS = 3;
-const ROWS = 8;
+const ROWS = 11;
 
 export const LABEL_SHEET = {
   cols: COLS,
@@ -32,9 +28,9 @@ export const LABEL_SHEET = {
   labelsPerPage: COLS * ROWS,
   marginTopMm: MARGIN_TOP,
   marginBottomMm: MARGIN_BOTTOM,
-  marginLeftMm: MARGIN_LEFT,
-  marginRightMm: MARGIN_RIGHT,
-  labelWidthMm: (PAGE_W - MARGIN_LEFT - MARGIN_RIGHT) / COLS,
+  marginLeftMm: 0,
+  marginRightMm: 0,
+  labelWidthMm: PAGE_W / COLS,
   labelHeightMm: (PAGE_H - MARGIN_TOP - MARGIN_BOTTOM) / ROWS,
 } as const;
 
@@ -56,15 +52,17 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 
 export const MAKEUPS_LABELS_PRINT_CSS = `
 @page { size: A4; margin: 0; }
+html, body { margin: 0; padding: 0; width: 210mm; }
 * { box-sizing: border-box; }
-body { margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; }
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; }
 .label-page {
   width: 210mm;
   height: 297mm;
-  padding: ${LABEL_SHEET.marginTopMm}mm ${LABEL_SHEET.marginRightMm}mm ${LABEL_SHEET.marginBottomMm}mm ${LABEL_SHEET.marginLeftMm}mm;
+  margin: 0;
+  padding: ${MARGIN_TOP}mm 0 ${MARGIN_BOTTOM}mm 0;
   display: grid;
-  grid-template-columns: repeat(${LABEL_SHEET.cols}, ${LABEL_SHEET.labelWidthMm}mm);
-  grid-template-rows: repeat(${LABEL_SHEET.rows}, ${LABEL_SHEET.labelHeightMm}mm);
+  grid-template-columns: repeat(${COLS}, calc(${PAGE_W}mm / ${COLS}));
+  grid-template-rows: repeat(${ROWS}, calc((${PAGE_H}mm - ${MARGIN_TOP + MARGIN_BOTTOM}mm) / ${ROWS}));
   gap: 0;
   page-break-after: always;
   break-after: page;
@@ -72,55 +70,58 @@ body { margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSys
 }
 .label-page:last-child { page-break-after: auto; break-after: auto; }
 .label-item {
-  width: ${LABEL_SHEET.labelWidthMm}mm;
-  height: ${LABEL_SHEET.labelHeightMm}mm;
-  padding: 1.2mm 1.8mm;
+  width: 100%;
+  height: 100%;
+  padding: 0.8mm 2mm;
   overflow: hidden;
   break-inside: avoid;
   page-break-inside: avoid;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
 }
 .label-title {
-  font-size: 7pt;
+  font-size: 8.5pt;
   font-weight: 700;
-  line-height: 1.15;
-  margin: 0 0 0.6mm;
+  line-height: 1.1;
+  margin: 0 0 0.5mm;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.label-line {
-  font-size: 6pt;
-  line-height: 1.2;
-  margin: 0;
+.label-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2mm;
+  row-gap: 0.2mm;
+  font-size: 7.5pt;
+  line-height: 1.12;
+}
+.label-field {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.label-line-pair {
-  font-size: 6pt;
-  line-height: 1.2;
-  margin: 0;
+.label-field-wide {
+  grid-column: 1 / -1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .label-note {
-  font-size: 5.5pt;
-  line-height: 1.18;
+  font-size: 7pt;
+  line-height: 1.12;
   margin: 0.4mm 0 0;
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   word-break: break-word;
 }
 .label-note-empty { color: #9ca3af; }
 @media print {
+  html, body { width: 210mm; height: auto; }
   .label-page { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 `;
@@ -146,9 +147,13 @@ function labelItemHtml(row: MakeupPrintRow): string {
 
   return `<div class="label-item">
   <div class="label-title">${student}</div>
-  <p class="label-line">מבחן: ${exam}</p>
-  <p class="label-line">השלמה: ${makeupDate} · מורה: ${teacher}</p>
-  <p class="label-line-pair">ציון התחלה: ${startGrade} · בתשלום: ${paid}</p>
+  <div class="label-grid">
+    <span class="label-field-wide">מבחן: ${exam}</span>
+    <span class="label-field">השלמה: ${makeupDate}</span>
+    <span class="label-field">מורה: ${teacher}</span>
+    <span class="label-field">ציון: ${startGrade}</span>
+    <span class="label-field">בתשלום: ${paid}</span>
+  </div>
   <p class="${noteClass}">${noteText}</p>
 </div>`;
 }
