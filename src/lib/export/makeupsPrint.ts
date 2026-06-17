@@ -72,7 +72,7 @@ body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sa
 .label-item {
   width: 100%;
   height: 100%;
-  padding: 0.8mm 2mm;
+  padding: 0.5mm 1.5mm;
   overflow: hidden;
   break-inside: avoid;
   page-break-inside: avoid;
@@ -81,10 +81,10 @@ body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sa
   justify-content: center;
 }
 .label-title {
-  font-size: 8.5pt;
+  font-size: 9.5pt;
   font-weight: 700;
-  line-height: 1.1;
-  margin: 0 0 0.5mm;
+  line-height: 1.08;
+  margin: 0 0 0.3mm;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,9 +93,9 @@ body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sa
   display: grid;
   grid-template-columns: 1fr 1fr;
   column-gap: 2mm;
-  row-gap: 0.2mm;
-  font-size: 7.5pt;
-  line-height: 1.12;
+  row-gap: 0.1mm;
+  font-size: 8.5pt;
+  line-height: 1.08;
 }
 .label-field {
   min-width: 0;
@@ -110,9 +110,9 @@ body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sa
   text-overflow: ellipsis;
 }
 .label-note {
-  font-size: 7pt;
-  line-height: 1.12;
-  margin: 0.4mm 0 0;
+  font-size: 8pt;
+  line-height: 1.08;
+  margin: 0.3mm 0 0;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
