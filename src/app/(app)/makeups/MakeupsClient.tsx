@@ -397,10 +397,7 @@ export function MakeupsClient() {
       styles: MAKEUPS_LIST_PRINT_CSS,
       bodyHtml: buildMakeupsListPrintHtml({
         rows,
-        totalCount,
-        isFiltering,
         logoUrl,
-        yearName: viewingYear?.year_name,
       }),
     });
   }
