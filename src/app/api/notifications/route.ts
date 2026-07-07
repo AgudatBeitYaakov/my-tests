@@ -10,38 +10,16 @@ import {
   EXAM_SUBMISSION_DUE_OFFSET,
   GRADES_SUBMISSION_DUE_OFFSET,
 } from "@/lib/tracking/dates";
+import {
+  notificationCategory,
+  type Notification,
+  type NotificationSeverity,
+} from "@/lib/notifications/categories";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-/* ─────────────── טיפוסי ההתראות ─────────────── */
-
-export type NotificationSeverity = "urgent" | "warning" | "info";
-
-export type NotificationType =
-  | "exam_today"
-  | "exam_tomorrow"
-  | "exam_upcoming"
-  | "submission_overdue"
-  | "grades_overdue"
-  | "grades_not_transferred"
-  | "makeup_open_overdue"
-  | "makeup_sent_no_grade";
-
-export type Notification = {
-  id: string;
-  type: NotificationType;
-  severity: NotificationSeverity;
-  title: string;
-  body: string;
-  href: string;
-  icon: "calendar" | "alert" | "clock" | "file" | "send" | "check";
-  sortDate: string; // YYYY-MM-DD לסידור: ככל שמוקדם יותר → דחוף יותר
-  /** מזהה ישות לדה-דופ — אם 2 התראות חולקות אותו מזהה, יישאר רק הכי דחוף עם רמז למספר */
-  entityKey: string;
-  /** תוסף אופציונלי לכותרת אחרי איחוד התראות, למשל "(+2 נושאים)" */
-  extraCount?: number;
-};
+export type { Notification, NotificationSeverity, NotificationType } from "@/lib/notifications/categories";
 
 /* ─────────────── עזרי תאריך ─────────────── */
 
@@ -69,6 +47,10 @@ const SEVERITY_RANK: Record<NotificationSeverity, number> = {
   warning: 1,
   info: 2,
 };
+
+function buildNotification(item: Omit<Notification, "category">): Notification {
+  return { ...item, category: notificationCategory(item.type) };
+}
 
 /* ─────────────── GET ─────────────── */
 
@@ -232,7 +214,7 @@ export async function GET(request: Request) {
     const hebDate = formatHebrewDateFromYmd(e.exam_date);
 
     if (e.exam_date === today) {
-      items.push({
+      items.push(buildNotification({
         id: `exam-today-${e.id}`,
         type: "exam_today",
         severity: "warning",
@@ -242,9 +224,9 @@ export async function GET(request: Request) {
         icon: "calendar",
         sortDate: e.exam_date,
         entityKey: `exam:${e.id}`,
-      });
+      }));
     } else if (e.exam_date === tomorrow) {
-      items.push({
+      items.push(buildNotification({
         id: `exam-tomorrow-${e.id}`,
         type: "exam_tomorrow",
         severity: "info",
@@ -254,10 +236,10 @@ export async function GET(request: Request) {
         icon: "calendar",
         sortDate: e.exam_date,
         entityKey: `exam:${e.id}`,
-      });
+      }));
     } else {
       const days = daysBetween(today, e.exam_date);
-      items.push({
+      items.push(buildNotification({
         id: `exam-upcoming-${e.id}`,
         type: "exam_upcoming",
         severity: "info",
@@ -267,7 +249,7 @@ export async function GET(request: Request) {
         icon: "calendar",
         sortDate: e.exam_date,
         entityKey: `exam:${e.id}`,
-      });
+      }));
     }
   }
 
@@ -287,7 +269,7 @@ export async function GET(request: Request) {
       if (today >= submissionDue && e.exam_date >= submissionWindowStart) {
         const overdue = daysBetween(submissionDue, today);
         const severity: NotificationSeverity = e.exam_date < today ? "urgent" : "warning";
-        items.push({
+        items.push(buildNotification({
           id: `submission-overdue-${e.id}`,
           type: "submission_overdue",
           severity,
@@ -300,7 +282,7 @@ export async function GET(request: Request) {
           icon: "alert",
           sortDate: submissionDue,
           entityKey: `exam:${e.id}`,
-        });
+        }));
       }
     }
 
@@ -312,7 +294,7 @@ export async function GET(request: Request) {
       const gradesDue = addDays(gradesBaseDate, GRADES_SUBMISSION_DUE_OFFSET);
       if (today >= gradesDue) {
         const overdue = daysBetween(gradesDue, today);
-        items.push({
+        items.push(buildNotification({
           id: `grades-overdue-${e.id}`,
           type: "grades_overdue",
           severity: "urgent",
@@ -322,9 +304,9 @@ export async function GET(request: Request) {
           icon: "alert",
           sortDate: gradesDue,
           entityKey: `exam:${e.id}`,
-        });
+        }));
       } else if (today >= addDays(gradesDue, -3)) {
-        items.push({
+        items.push(buildNotification({
           id: `grades-upcoming-${e.id}`,
           type: "grades_overdue",
           severity: "warning",
@@ -334,7 +316,7 @@ export async function GET(request: Request) {
           icon: "clock",
           sortDate: gradesDue,
           entityKey: `exam:${e.id}`,
-        });
+        }));
       }
     }
 
@@ -344,7 +326,7 @@ export async function GET(request: Request) {
       t.grades_submitted &&
       !t.transferred_to_system
     ) {
-      items.push({
+      items.push(buildNotification({
         id: `grades-not-transferred-${e.id}`,
         type: "grades_not_transferred",
         severity: "warning",
@@ -354,7 +336,7 @@ export async function GET(request: Request) {
         icon: "file",
         sortDate: e.exam_date,
         entityKey: `exam:${e.id}`,
-      });
+      }));
     }
   }
 
@@ -378,7 +360,7 @@ export async function GET(request: Request) {
 
     const studentLabel = `${stRaw.first_name} ${stRaw.last_name}`.trim() || "תלמידה";
     const subj = exRaw.subject ?? "מבחן";
-    items.push({
+    items.push(buildNotification({
       id: `makeup-open-${m.id}`,
       type: "makeup_open_overdue",
       severity: days >= 30 ? "urgent" : "warning",
@@ -387,9 +369,8 @@ export async function GET(request: Request) {
       href: `/makeups`,
       icon: "clock",
       sortDate: createdYmd,
-      // לפי תלמידה+מבחן — כך גם "פתוחה ותיקה" וגם "נשלחה ולא חזר ציון" יתאחדו
       entityKey: `student-exam:${m.student_id}:${m.exam_id}`,
-    });
+    }));
   }
 
   /* ── מעקב השלמות: נשלח למורה ולא חזר ציון ── */
@@ -412,7 +393,7 @@ export async function GET(request: Request) {
 
     const studentLabel = `${stRaw.first_name} ${stRaw.last_name}`.trim() || "תלמידה";
     const subj = exRaw.subject ?? "מבחן";
-    items.push({
+    items.push(buildNotification({
       id: `makeup-sent-${mt.id}`,
       type: "makeup_sent_no_grade",
       severity: days >= 21 ? "warning" : "info",
@@ -422,7 +403,7 @@ export async function GET(request: Request) {
       icon: "send",
       sortDate: sentYmd,
       entityKey: `student-exam:${mt.student_id}:${mt.exam_id}`,
-    });
+    }));
   }
 
   /* ── דה-דופ: התראה אחת לישות (לפי entityKey) ── */

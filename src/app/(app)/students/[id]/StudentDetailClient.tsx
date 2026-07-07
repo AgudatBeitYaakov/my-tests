@@ -150,7 +150,7 @@ export function StudentDetailClient({ id }: { id: string }) {
                   exam: m.exam,
                 })),
               };
-              printStudentCards([card]);
+              void printStudentCards([card]);
             }}
           />
           <Link

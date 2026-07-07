@@ -174,9 +174,13 @@ export function buildStudentCardSectionHtml(
         .join("")
     : "";
 
+  const logoHtml = logoUrl
+    ? `<img class="card-logo" src="${logoUrl.replace(/"/g, "&quot;")}" alt="" />`
+    : "";
+
   return `<section class="student-card">
   <header class="card-header">
-    <img class="card-logo" src="${escapePrintText(logoUrl)}" alt="" />
+    ${logoHtml}
     <div class="card-title-block">
       <h1 class="card-name">${name}</h1>
       <p class="card-tz">ת״ז <span dir="ltr">${tz}</span></p>

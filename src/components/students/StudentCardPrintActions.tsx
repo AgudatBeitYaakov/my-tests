@@ -1,19 +1,24 @@
 "use client";
 
 import { Printer } from "lucide-react";
-import { openPrintDocument } from "@/lib/export/printClient";
+import { fetchAssetAsDataUrl, openPrintDocument } from "@/lib/export/printClient";
 import {
   STUDENT_CARD_PRINT_CSS,
   buildStudentCardsPrintHtml,
 } from "@/lib/export/studentCardPrint";
 import type { StudentCardData } from "@/lib/students/loadStudentCardData";
 
-export function printStudentCards(cards: StudentCardData[]) {
+export async function printStudentCards(cards: StudentCardData[]) {
   if (!cards.length) {
     alert("אין נתונים להדפסה");
     return;
   }
-  const logoUrl = `${window.location.origin}/logo.png`;
+  let logoUrl = "";
+  try {
+    logoUrl = await fetchAssetAsDataUrl("/logo.png");
+  } catch {
+    /* לוגו אופציונלי */
+  }
   const title =
     cards.length === 1
       ? `כרטיס ${cards[0].student.last_name} ${cards[0].student.first_name}`
@@ -22,6 +27,7 @@ export function printStudentCards(cards: StudentCardData[]) {
     title,
     styles: STUDENT_CARD_PRINT_CSS,
     bodyHtml: buildStudentCardsPrintHtml(cards, logoUrl),
+    hideBrowserChrome: true,
   });
 }
 

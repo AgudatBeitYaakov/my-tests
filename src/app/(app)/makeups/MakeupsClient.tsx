@@ -5,6 +5,7 @@ import { BookOpen, CheckCircle2, Pencil, Undo2, UserRound } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
+import { ExamWorkspaceModal } from "@/components/exams/ExamWorkspaceModal";
 import { CompleteMakeupDialog } from "@/components/makeup/CompleteMakeupDialog";
 import {
   RegisterForMakeupDialog,
@@ -134,6 +135,7 @@ export function MakeupsClient() {
   const [editGradeId, setEditGradeId] = useState<string | null>(null);
   const [editGradeValue, setEditGradeValue] = useState("");
   const [editGradeBusy, setEditGradeBusy] = useState(false);
+  const [examModalId, setExamModalId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -556,21 +558,35 @@ export function MakeupsClient() {
             </div>
           </div>
         </ListTableToolbar>
-        <Table className="w-full table-fixed text-xs">
+        <Table className="w-full table-fixed text-[11px]">
+          <colgroup>
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "5%" }} />
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "13%" }} />
+          </colgroup>
           <TableHeader>
             <TableRow>
-              <TableHead className="px-1.5 py-2">תלמידה</TableHead>
-              <TableHead className="px-1.5 py-2">מבחן</TableHead>
-              <TableHead className="px-1.5 py-2 whitespace-normal">ת. מבחן</TableHead>
-              <TableHead className="px-1.5 py-2">מורה</TableHead>
-              <TableHead className="px-1.5 py-2">סטטוס</TableHead>
-              <TableHead className="px-1.5 py-2 whitespace-normal">נרשמה</TableHead>
-              <TableHead className="px-1.5 py-2 whitespace-normal">ת. השלמה</TableHead>
-              <TableHead className="px-1.5 py-2 whitespace-normal">צ. התחלה</TableHead>
-              <TableHead className="px-1.5 py-2">בתשלום</TableHead>
-              <TableHead className="px-1.5 py-2">ציון</TableHead>
-              <TableHead className="px-1.5 py-2">הערה</TableHead>
-              <TableHead className="w-[1%] px-1.5 py-2 whitespace-normal">פעולות</TableHead>
+              <TableHead className="px-1 py-2">תלמידה</TableHead>
+              <TableHead className="px-1 py-2">מבחן</TableHead>
+              <TableHead className="px-1 py-2" title="תאריך מבחן">ת.מבחן</TableHead>
+              <TableHead className="px-1 py-2">מורה</TableHead>
+              <TableHead className="px-1 py-2" title="סטטוס">סט׳</TableHead>
+              <TableHead className="px-1 py-2" title="נרשמה להשלמה">נר׳</TableHead>
+              <TableHead className="px-1 py-2" title="תאריך השלמה">ת.השלמה</TableHead>
+              <TableHead className="px-1 py-2" title="ציון התחלה">צ.התחלה</TableHead>
+              <TableHead className="px-1 py-2" title="בתשלום">תש׳</TableHead>
+              <TableHead className="px-1 py-2">ציון</TableHead>
+              <TableHead className="px-1 py-2">הערה</TableHead>
+              <TableHead className="px-1 py-2">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -585,7 +601,7 @@ export function MakeupsClient() {
                   <TableCell className="truncate px-1.5 py-1.5" title={m.exam?.subject ?? undefined}>
                     {m.exam?.subject ?? "—"}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap px-1.5 py-1.5 tabular-nums">
+                  <TableCell className="truncate px-1 py-1 tabular-nums" title={m.exam?.exam_date ? formatHebrewDateFromYmd(m.exam.exam_date) : undefined}>
                     {m.exam?.exam_date ? formatHebrewDateFromYmd(m.exam.exam_date) : "—"}
                   </TableCell>
                   <TableCell className="truncate px-1.5 py-1.5" title={m.exam?.teacher_name ?? undefined}>
@@ -602,7 +618,7 @@ export function MakeupsClient() {
                       onToggle={() => onRegisteredToggle(m)}
                     />
                   </TableCell>
-                  <TableCell className="whitespace-nowrap px-1.5 py-1.5 tabular-nums">
+                  <TableCell className="truncate px-1 py-1 tabular-nums" title={m.auto_registered && m.completed_at ? formatMakeupDate(m.completed_at) : undefined}>
                     {m.auto_registered && m.completed_at ? formatMakeupDate(m.completed_at) : "—"}
                   </TableCell>
                   <TableCell className="px-1.5 py-1.5 tabular-nums">
@@ -646,14 +662,15 @@ export function MakeupsClient() {
                         <UserRound className="size-3 shrink-0 opacity-80" strokeWidth={2} />
                         <span className="sr-only">כרטיס תלמידה</span>
                       </Link>
-                      <Link
-                        href={`/exams/${m.exam_id}`}
+                      <button
+                        type="button"
                         className={`${LIST_ROW_LINK_CLASS} !rounded-lg !px-1 !py-0.5`}
                         title="למבחן"
+                        onClick={() => setExamModalId(m.exam_id)}
                       >
                         <BookOpen className="size-3 shrink-0 opacity-80" strokeWidth={2} />
                         <span className="sr-only">למבחן</span>
-                      </Link>
+                      </button>
                       {!readOnly ? (
                         <button
                           type="button"
@@ -695,6 +712,7 @@ export function MakeupsClient() {
                         entity="makeups"
                         id={m.id}
                         compact
+                        iconOnly
                         label="הערה"
                         modalTitle={`הערה — ${m.student ? `${m.student.first_name} ${m.student.last_name}`.trim() : "השלמה"}`}
                         hasNote={hasAnyMakeupDisplayNote({
@@ -805,6 +823,12 @@ export function MakeupsClient() {
           </div>
         </div>
       ) : null}
+
+      <ExamWorkspaceModal
+        examId={examModalId}
+        open={Boolean(examModalId)}
+        onClose={() => setExamModalId(null)}
+      />
     </div>
   );
 }

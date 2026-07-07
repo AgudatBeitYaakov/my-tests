@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CalendarPlus, PenLine, Users } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
+import { ExamWorkspaceModal } from "@/components/exams/ExamWorkspaceModal";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import {
   ListDataCard,
@@ -69,6 +70,11 @@ export function ExamsListClient() {
   const [specFilter, setSpecFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const deferredSearch = useDeferredValue(searchTerm);
+
+  const [examWorkspace, setExamWorkspace] = useState<{
+    examId: string;
+    view: "students" | "edit";
+  } | null>(null);
 
   const allExams = data?.exams ?? [];
   const filteredExams = useMemo(() => {
@@ -259,23 +265,25 @@ export function ExamsListClient() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <div className="flex flex-wrap justify-end gap-1.5">
-                      <Link
-                        href={`/exams/${e.id}`}
+                      <button
+                        type="button"
                         title="תלמידות וסטטוסים במבחן"
+                        onClick={() => setExamWorkspace({ examId: e.id, view: "students" })}
                         className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-900 transition hover:bg-sky-100 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-900/50"
                       >
                         <Users className="size-3.5 shrink-0 opacity-90" strokeWidth={2} />
                         תלמידות
-                      </Link>
+                      </button>
                       {!readOnly ? (
-                        <Link
-                          href={`/exams/${e.id}/edit`}
+                        <button
+                          type="button"
                           title="תאריך, מורה, יעד ושכבות"
+                          onClick={() => setExamWorkspace({ examId: e.id, view: "edit" })}
                           className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 transition hover:bg-amber-100 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/50"
                         >
                           <PenLine className="size-3.5 shrink-0 opacity-90" strokeWidth={2} />
                           עריכת מבחן
-                        </Link>
+                        </button>
                       ) : null}
                     </div>
                   </TableCell>
@@ -301,6 +309,13 @@ export function ExamsListClient() {
           />
         ) : null}
       </ListDataCard>
+
+      <ExamWorkspaceModal
+        examId={examWorkspace?.examId ?? null}
+        open={Boolean(examWorkspace)}
+        initialView={examWorkspace?.view ?? "students"}
+        onClose={() => setExamWorkspace(null)}
+      />
     </div>
   );
 }

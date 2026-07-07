@@ -114,7 +114,7 @@ export function StudentsListClient() {
 
   function handleConfirmPrint() {
     if (!printPreview?.cards.length) return;
-    printStudentCards(printPreview.cards);
+    void printStudentCards(printPreview.cards);
     setPrintDialogOpen(false);
     setPrintPreview(null);
   }

@@ -12,10 +12,12 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 import { ListDataCard, ListPageHeader } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { countBySeverity, isTeacherNotification } from "@/lib/notifications/categories";
 
 type Severity = "urgent" | "warning" | "info";
 type IconKey = "calendar" | "alert" | "clock" | "file" | "send" | "check";
@@ -80,15 +82,25 @@ export function NotificationsClient() {
     refreshWhenHidden: false,
   });
 
+  const [categoryFilter, setCategoryFilter] = useState<"teacher" | "student" | "all">("teacher");
   const [filter, setFilter] = useState<"all" | Severity>("all");
 
   const items = data?.items ?? [];
-  const counts = data?.counts ?? { urgent: 0, warning: 0, info: 0, total: 0 };
+
+  const categoryItems = useMemo(() => {
+    if (categoryFilter === "all") return items;
+    return items.filter((it) => {
+      const cat = isTeacherNotification(it.type) ? "teacher" : "student";
+      return cat === categoryFilter;
+    });
+  }, [items, categoryFilter]);
+
+  const counts = useMemo(() => countBySeverity(categoryItems), [categoryItems]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter((it) => it.severity === filter);
-  }, [items, filter]);
+    if (filter === "all") return categoryItems;
+    return categoryItems.filter((it) => it.severity === filter);
+  }, [categoryItems, filter]);
 
   return (
     <div className="space-y-8">
@@ -112,6 +124,35 @@ export function NotificationsClient() {
           אינך צופה בשנה הפעילה — אין התראות לארכיון.
         </p>
       ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ["teacher", "מורים ומבחנים"],
+            ["student", "השלמות ותלמידות"],
+            ["all", "הכל"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              setCategoryFilter(key);
+              setFilter("all");
+            }}
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+              categoryFilter === key
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+            }`}
+          >
+            {label}
+            <span className="ms-2 tabular-nums opacity-80">
+              ({key === "all" ? items.length : items.filter((it) => (isTeacherNotification(it.type) ? "teacher" : "student") === key).length})
+            </span>
+          </button>
+        ))}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard

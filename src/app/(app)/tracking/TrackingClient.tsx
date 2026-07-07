@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, Pencil } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
@@ -11,7 +10,6 @@ import {
   LIST_ROW_LINK_CLASS,
 } from "@/components/ui/ListPage";
 import { HebrewDatePicker } from "@/components/ui/HebrewDatePicker";
-import { HebrewDateTimePicker } from "@/components/ui/HebrewDateTimePicker";
 import { ListFilterBar, matchesNameQuery } from "@/components/ui/ListFilterBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
@@ -25,6 +23,8 @@ import {
   formatTrackingDateTime,
   GRADES_SUBMISSION_DUE_OFFSET,
 } from "@/lib/tracking/dates";
+import { ExamWorkspaceModal } from "@/components/exams/ExamWorkspaceModal";
+import { TrackingEditDialog } from "@/components/tracking/TrackingEditDialog";
 import { MakeupTrackingTab } from "./MakeupTrackingTab";
 
 const fetcher = (url: string) => fetch(url).then((r) => {
@@ -207,7 +207,8 @@ export function TrackingClient() {
     withYearQuery("/api/tracking", yearId),
     fetcher,
   );
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRow, setEditingRow] = useState<Row | null>(null);
+  const [examModalId, setExamModalId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>("exam_date");
@@ -305,7 +306,7 @@ export function TrackingClient() {
     }
     const warning = (j as { warning?: string }).warning;
     if (warning) alert(warning);
-    setEditingId(null);
+    setEditingRow(null);
     await mutate();
   }
 
@@ -571,14 +572,15 @@ export function TrackingClient() {
                       );
                     })()}
                     <TableCell className="px-1 py-1.5 text-center">
-                      <Link
-                        href={`/exams/${row.exam_id}`}
+                      <button
+                        type="button"
                         className={`${LIST_ROW_LINK_CLASS} !rounded-lg !px-1 !py-0.5`}
                         title="פתיחת מבחן"
+                        onClick={() => setExamModalId(row.exam_id)}
                       >
                         <BookOpen className="size-3 shrink-0 opacity-80" strokeWidth={2} />
                         <span className="sr-only">פתיחת מבחן</span>
-                      </Link>
+                      </button>
                     </TableCell>
                     <TableCell
                       className="whitespace-nowrap px-1 py-1.5 tabular-nums text-[11px]"
@@ -608,19 +610,12 @@ export function TrackingClient() {
                       <BoolCell value={row.transferred_to_system} />
                     </TableCell>
                     <TableCell className="px-1 py-1.5">
-                      {editingId === row.id ? (
-                        <TrackingRowForm
-                          key={row.id}
-                          row={row}
-                          onCancel={() => setEditingId(null)}
-                          onSave={(payload) => void saveRow(row.id, payload)}
-                        />
-                      ) : !readOnly ? (
+                      {!readOnly ? (
                         <button
                           type="button"
                           className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-1 py-0.5"
                           title="עריכה"
-                          onClick={() => setEditingId(row.id)}
+                          onClick={() => setEditingRow(row)}
                         >
                           <Pencil className="size-3 shrink-0" strokeWidth={2} />
                           <span className="sr-only">עריכה</span>
@@ -649,139 +644,19 @@ export function TrackingClient() {
         </ListDataCard>
         </>
       ) : null}
-    </div>
-  );
-}
 
-function TrackingRowForm({
-  row,
-  onCancel,
-  onSave,
-}: {
-  row: Row;
-  onCancel: () => void;
-  onSave: (p: {
-    submitted_exam: string | null;
-    student_submission_date: string | null;
-    reminder_1_hindi: string | null;
-    reminder_2_biller: string | null;
-    approved_by_coordinator: boolean;
-    sent_for_review: boolean;
-    grades_submitted: boolean;
-    grades_approved: boolean;
-    transferred_to_system: boolean;
-  }) => void;
-}) {
-  const [examSubmitted, setExamSubmitted] = useState(Boolean(row.submitted_exam));
-  const [submittedIso, setSubmittedIso] = useState<string | null>(row.submitted_exam);
-  const [studentSubmissionDate, setStudentSubmissionDate] = useState<string>(
-    row.student_submission_date ? row.student_submission_date.slice(0, 10) : "",
-  );
-  const [reminder1Hindi, setReminder1Hindi] = useState<string>(
-    row.reminder_1_hindi ? row.reminder_1_hindi.slice(0, 10) : "",
-  );
-  const [reminder2Biller, setReminder2Biller] = useState<string>(
-    row.reminder_2_biller ? row.reminder_2_biller.slice(0, 10) : "",
-  );
-  const [approved, setApproved] = useState(row.approved_by_coordinator);
-  const [sent, setSent] = useState(row.sent_for_review);
-  const [gradesIn, setGradesIn] = useState(row.grades_submitted);
-  const [gradesOk, setGradesOk] = useState(row.grades_approved);
-  const [transferred, setTransferred] = useState(row.transferred_to_system);
+      <TrackingEditDialog
+        open={Boolean(editingRow)}
+        row={editingRow}
+        onClose={() => setEditingRow(null)}
+        onSave={(payload) => (editingRow ? saveRow(editingRow.id, payload) : undefined)}
+      />
 
-  function handleSave() {
-    if (examSubmitted && !submittedIso) {
-      alert('סימון «הוגש מבחן» דורש למלא תאריך ושעה של הגשת המבחן.');
-      return;
-    }
-    onSave({
-      submitted_exam: examSubmitted ? submittedIso : null,
-      student_submission_date: studentSubmissionDate.trim() || null,
-      reminder_1_hindi: reminder1Hindi.trim() || null,
-      reminder_2_biller: reminder2Biller.trim() || null,
-      approved_by_coordinator: approved,
-      sent_for_review: sent,
-      grades_submitted: gradesIn,
-      grades_approved: gradesOk,
-      transferred_to_system: transferred,
-    });
-  }
-
-  return (
-    <div className="flex min-w-[300px] flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-      <label className="inline-flex items-center gap-2 text-[11px] font-medium">
-        <input
-          type="checkbox"
-          checked={examSubmitted}
-          onChange={(e) => {
-            const checked = e.target.checked;
-            setExamSubmitted(checked);
-            if (!checked) setSubmittedIso(null);
-          }}
-        />
-        הוגש מבחן
-      </label>
-      {examSubmitted ? (
-        <HebrewDateTimePicker
-          label="תאריך ושעת הגשת מבחן *"
-          value={submittedIso}
-          onChange={setSubmittedIso}
-          required
-        />
-      ) : null}
-      <HebrewDatePicker
-        label='תאריך הגשת מטלה ע"י תלמידות'
-        value={studentSubmissionDate}
-        onChange={setStudentSubmissionDate}
-        allowEmpty
-        emptyHint="לא נבחר — אופציונלי"
+      <ExamWorkspaceModal
+        examId={examModalId}
+        open={Boolean(examModalId)}
+        onClose={() => setExamModalId(null)}
       />
-      <label className="inline-flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={approved} onChange={(e) => setApproved(e.target.checked)} />
-        אישור רכזת
-      </label>
-      <label className="inline-flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={sent} onChange={(e) => setSent(e.target.checked)} />
-        נשלח לבדיקה
-      </label>
-      <HebrewDatePicker
-        label='תזכורת 1 ע"י הינדי'
-        value={reminder1Hindi}
-        onChange={setReminder1Hindi}
-        allowEmpty
-        emptyHint="לא נבחר — אופציונלי"
-      />
-      <HebrewDatePicker
-        label='תזכורת 2 ע"י בילר'
-        value={reminder2Biller}
-        onChange={setReminder2Biller}
-        allowEmpty
-        emptyHint="לא נבחר — אופציונלי"
-      />
-      <label className="inline-flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={gradesIn} onChange={(e) => setGradesIn(e.target.checked)} />
-        ציונים הוגשו
-      </label>
-      <label className="inline-flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={gradesOk} onChange={(e) => setGradesOk(e.target.checked)} />
-        ציונים אושרו
-      </label>
-      <label className="inline-flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={transferred} onChange={(e) => setTransferred(e.target.checked)} />
-        הועבר למערכת
-      </label>
-      <div className="mt-1 flex gap-2">
-        <button
-          type="button"
-          className="rounded-md border border-zinc-900 bg-zinc-900 px-2 py-1 text-[11px] text-white"
-          onClick={handleSave}
-        >
-          שמירה
-        </button>
-        <button type="button" className="rounded-md border px-2 py-1 text-[11px]" onClick={onCancel}>
-          ביטול
-        </button>
-      </div>
     </div>
   );
 }

@@ -22,6 +22,8 @@ type Props = {
   modalTitle?: string;
   /** מצב קומפקטי — איקון + תווית, מתאים לתאי טבלה */
   compact?: boolean;
+  /** רק איקון בלי טקסט — לטבלאות צפופות */
+  iconOnly?: boolean;
   hasNote?: boolean;
   onSaved?: (notes: string) => void;
 };
@@ -32,6 +34,7 @@ export function NotesButton({
   label = "הערות",
   modalTitle,
   compact = false,
+  iconOnly = false,
   hasNote = false,
   onSaved,
 }: Props) {
@@ -90,7 +93,8 @@ export function NotesButton({
 
   const buttonClass = compact
     ? [
-        "relative inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition",
+        "relative inline-flex items-center gap-1 rounded-md border transition",
+        iconOnly ? "px-1 py-0.5" : "px-2 py-1 text-xs font-medium",
         showFilled
           ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
           : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
@@ -111,8 +115,8 @@ export function NotesButton({
         title={showFilled ? `${label} — לחצי לעריכה` : `הוספת ${label}`}
         aria-label={label}
       >
-        <Icon className="size-3.5 shrink-0" />
-        <span>{label}</span>
+        <Icon className={iconOnly ? "size-3 shrink-0" : "size-3.5 shrink-0"} />
+        {iconOnly ? <span className="sr-only">{label}</span> : <span>{label}</span>}
         {showFilled && compact ? (
           <span
             aria-hidden

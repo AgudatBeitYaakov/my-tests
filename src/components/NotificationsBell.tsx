@@ -12,6 +12,8 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { countBySeverity, isTeacherNotification } from "@/lib/notifications/categories";
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 type Severity = "urgent" | "warning" | "info";
@@ -89,9 +91,9 @@ export function NotificationsBell() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const items = data?.items ?? [];
-  const counts = data?.counts ?? { urgent: 0, warning: 0, info: 0, total: 0 };
-  // badge = דחוף + התראות בלבד. מידע לא "שורף" את האייקון
+  const allItems = data?.items ?? [];
+  const items = allItems.filter((it) => isTeacherNotification(it.type));
+  const counts = countBySeverity(items);
   const badgeCount = counts.urgent + counts.warning;
 
   const top = items.slice(0, 12);
@@ -127,7 +129,7 @@ export function NotificationsBell() {
           {/* כותרת */}
           <div className="flex items-center justify-between border-b border-zinc-200/70 bg-zinc-50/70 px-4 py-2.5 dark:border-zinc-700/70 dark:bg-zinc-800/40">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">התראות</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">התראות מורים</h3>
               {counts.total > 0 ? (
                 <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
                   {counts.total}
@@ -203,7 +205,7 @@ export function NotificationsBell() {
                 className="font-medium text-sky-700 hover:underline dark:text-sky-300"
                 onClick={() => setOpen(false)}
               >
-                צפי בכל ההתראות ({items.length})
+                צפי בכל ההתראות (מורים + תלמידות)
               </Link>
             </div>
           ) : counts.total > 0 ? (
