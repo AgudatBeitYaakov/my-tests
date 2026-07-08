@@ -264,33 +264,31 @@ export function ExamStudentsPanel({ examId, embedded, showTitle = true, onEditEx
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <Table className="w-full table-fixed text-xs">
+        <Table className="w-full table-fixed text-sm">
           <colgroup>
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "8%" }} />
+            <col style={{ width: "16%" }} />
             <col style={{ width: "10%" }} />
-            <col style={{ width: "14%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "7%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "12%" }} />
           </colgroup>
           <TableHeader>
             <TableRow>
-              <TableHead className="px-1.5 py-2">תלמידה</TableHead>
-              <TableHead className="px-1.5 py-2">ת״ז</TableHead>
-              <TableHead className="px-1.5 py-2">כיתה</TableHead>
-              <TableHead className="px-1.5 py-2">מסלול</TableHead>
-              <TableHead className="px-1.5 py-2">התמחות</TableHead>
-              <TableHead className="px-1.5 py-2" title="התמחות נוספת">התמח׳ נוס׳</TableHead>
-              <TableHead className="px-1.5 py-2" title="פסיכולוגיה">פסיכ׳</TableHead>
-              <TableHead className="px-1.5 py-2" title="סוג הוראה">הוראה</TableHead>
-              <TableHead className="px-1.5 py-2">סטטוס</TableHead>
-              <TableHead className="px-1.5 py-2">הערה</TableHead>
-              <TableHead className="px-1.5 py-2">פעולות</TableHead>
+              <TableHead className="px-2 py-2">תלמידה</TableHead>
+              <TableHead className="px-2 py-2">ת״ז</TableHead>
+              <TableHead className="px-2 py-2">כיתה</TableHead>
+              <TableHead className="px-2 py-2">מסלול</TableHead>
+              <TableHead className="px-2 py-2" title="התמחות · התמחות נוספת">התמחות</TableHead>
+              <TableHead className="px-2 py-2" title="פסיכולוגיה">פסיכ׳</TableHead>
+              <TableHead className="px-2 py-2" title="סוג הוראה">הוראה</TableHead>
+              <TableHead className="px-2 py-2">סטטוס</TableHead>
+              <TableHead className="px-2 py-2">הערה</TableHead>
+              <TableHead className="px-2 py-2">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -301,32 +299,39 @@ export function ExamStudentsPanel({ examId, embedded, showTitle = true, onEditEx
                 const isTook = row.status === "took";
                 const isMakeupOpen = row.status === "makeup" || row.status === "missing";
                 const isCompleted = row.status === "completed";
+                const spec = st ? pickLookupName(st.specializations) : "—";
+                const spec2 = st ? pickLookupName(st.secondary_specializations) : "—";
+                const specLabel =
+                  spec2 && spec2 !== "—"
+                    ? spec && spec !== "—"
+                      ? `${spec} · ${spec2}`
+                      : spec2
+                    : spec;
                 const baseBtn =
-                  "rounded border px-1 py-0.5 text-[10px] font-medium transition disabled:opacity-40";
+                  "rounded border px-1.5 py-1 text-xs font-medium transition disabled:opacity-40";
                 const activeRing = "ring-1 ring-offset-1";
                 return (
                   <TableRow key={row.id}>
-                    <TableCell className="truncate px-1.5 py-1 font-medium" title={studentLabel}>
+                    <TableCell className="truncate px-2 py-1.5 font-medium" title={studentLabel}>
                       {st ? `${st.last_name} ${st.first_name}` : "—"}
                     </TableCell>
-                    <TableCell className="truncate px-1.5 py-1 font-mono text-[10px]" dir="ltr">
+                    <TableCell className="truncate px-2 py-1.5 font-mono text-xs" dir="ltr">
                       {st?.tz ?? "—"}
                     </TableCell>
-                    <TableCell className="truncate px-1.5 py-1">{st ? pickLookupName(st.classes) : "—"}</TableCell>
-                    <TableCell className="truncate px-1.5 py-1">{st ? pickLookupName(st.tracks) : "—"}</TableCell>
-                    <TableCell className="truncate px-1.5 py-1">{st ? pickLookupName(st.specializations) : "—"}</TableCell>
-                    <TableCell className="truncate px-1.5 py-1">{st ? pickLookupName(st.secondary_specializations) : "—"}</TableCell>
-                    <TableCell className="px-1.5 py-1">{st ? psychologyLabel(st.is_psychology) : "—"}</TableCell>
-                    <TableCell className="truncate px-1.5 py-1">{st ? teachingTrackTypeLabel(st.teaching_track_type) : "—"}</TableCell>
-                    <TableCell className="px-1.5 py-1">
+                    <TableCell className="truncate px-2 py-1.5">{st ? pickLookupName(st.classes) : "—"}</TableCell>
+                    <TableCell className="truncate px-2 py-1.5">{st ? pickLookupName(st.tracks) : "—"}</TableCell>
+                    <TableCell className="truncate px-2 py-1.5" title={specLabel}>{specLabel}</TableCell>
+                    <TableCell className="px-2 py-1.5">{st ? psychologyLabel(st.is_psychology) : "—"}</TableCell>
+                    <TableCell className="truncate px-2 py-1.5">{st ? teachingTrackTypeLabel(st.teaching_track_type) : "—"}</TableCell>
+                    <TableCell className="px-2 py-1.5">
                       <ExamStudentStatusBadge status={row.status} />
                     </TableCell>
-                    <TableCell className="max-w-0 truncate px-1.5 py-1 text-[10px]">
+                    <TableCell className="max-w-0 truncate px-2 py-1.5 text-xs" title={row.notes?.trim() || undefined}>
                       {row.notes?.trim() ? row.notes : "—"}
                     </TableCell>
-                    <TableCell className="px-1 py-1">
+                    <TableCell className="px-1.5 py-1.5">
                       {!readOnly ? (
-                        <div className="flex flex-wrap gap-0.5">
+                        <div className="flex flex-wrap gap-1">
                           <button
                             type="button"
                             disabled={locked}
@@ -375,7 +380,7 @@ export function ExamStudentsPanel({ examId, embedded, showTitle = true, onEditEx
                           />
                         </div>
                       ) : (
-                        <span className="text-[10px] text-zinc-400">צפייה</span>
+                        <span className="text-xs text-zinc-400">צפייה</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -383,7 +388,7 @@ export function ExamStudentsPanel({ examId, embedded, showTitle = true, onEditEx
               })
             ) : (
               <TableRow>
-                <TableCell className="py-8 text-center text-zinc-500" colSpan={11}>
+                <TableCell className="py-8 text-center text-zinc-500" colSpan={10}>
                   אין תלמידות במבחן
                 </TableCell>
               </TableRow>

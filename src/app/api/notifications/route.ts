@@ -286,10 +286,9 @@ export async function GET(request: Request) {
       }
     }
 
-    // ציונים: יעד = (תאריך הגשת מטלה אם מולא, אחרת תאריך מבחן) + 7. רק למבחנים שעברו.
-    const gradesBaseDate = t.student_submission_date
-      ? t.student_submission_date.slice(0, 10)
-      : e.exam_date;
+    // ציונים: יעד = תאריך המבחן + 7 (תמיד לפי המבחן, לא לפי הגשת המטלה).
+    // כך עריכת תאריך המבחן מעדכנת את ההתראה, ולא נוצרת התראה נפרדת לפי תאריך ההגשה.
+    const gradesBaseDate = e.exam_date;
     if (gradesBaseDate <= today && !t.grades_submitted) {
       const gradesDue = addDays(gradesBaseDate, GRADES_SUBMISSION_DUE_OFFSET);
       if (today >= gradesDue) {
