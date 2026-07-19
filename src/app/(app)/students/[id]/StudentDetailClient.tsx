@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import useSWR from "swr";
 import { ExamStudentStatusBadge, MakeupStatusBadge } from "@/components/ui/StatusBadge";
 import { NotesButton } from "@/components/ui/NotesButton";
+import { ConfirmDangerDialog } from "@/components/ui/ConfirmDangerDialog";
 import {
   StudentCardPrintButton,
   printStudentCards,
@@ -80,6 +82,8 @@ function summarizeHistoryChange(row: HistoryRow): string[] {
 
 export function StudentDetailClient({ id }: { id: string }) {
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const { data, error, isLoading } = useSWR<{
     student: Student;
     exam_students: ExamRow[];
@@ -92,27 +96,20 @@ export function StudentDetailClient({ id }: { id: string }) {
   );
 
   async function handleDelete() {
-    const linked = data?.exam_students?.length ?? 0;
-    if (linked > 0) {
-      alert(
-        `לא ניתן למחוק תלמידה שמקושרת ל-${linked} מבחנים.\nיש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
-      );
-      return;
+    setDeleteBusy(true);
+    try {
+      const r = await fetch(`/api/students/${id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert((j as { error?: string }).error ?? "מחיקה נכשלה");
+        return;
+      }
+      setDeleteOpen(false);
+      router.push("/students");
+      router.refresh();
+    } finally {
+      setDeleteBusy(false);
     }
-    if (
-      !confirm(
-        "מחיקה קשה — התלמידה תימחק לצמיתות מהמסד נתונים.\nפעולה זו מותרת רק כשאין מבחנים מקושרים, ואינה ניתנת לביטול.\nלהמשיך?",
-      )
-    )
-      return;
-    const r = await fetch(`/api/students/${id}`, { method: "DELETE" });
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      alert((j as { error?: string }).error ?? "מחיקה נכשלה");
-      return;
-    }
-    router.push("/students");
-    router.refresh();
   }
 
   if (isLoading) {
@@ -176,7 +173,7 @@ export function StudentDetailClient({ id }: { id: string }) {
                 ? "מחיקה קשה מהמסד — רק אם אין מבחנים מקושרים"
                 : `לא ניתן למחוק — מקושרת ל-${linkedExamCount} מבחנים`
             }
-            onClick={() => void handleDelete()}
+            onClick={() => setDeleteOpen(true)}
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             מחיקה
@@ -192,6 +189,17 @@ export function StudentDetailClient({ id }: { id: string }) {
           המבחנים קודם.
         </p>
       ) : null}
+
+      <ConfirmDangerDialog
+        open={deleteOpen}
+        onClose={() => !deleteBusy && setDeleteOpen(false)}
+        title="מחיקת תלמידה"
+        description={`${s.last_name} ${s.first_name}`}
+        hint="מחיקה קשה — התלמידה תימחק לצמיתות מהמסד נתונים. פעולה זו אינה ניתנת לביטול."
+        confirmLabel="מחק לצמיתות"
+        busy={deleteBusy}
+        onConfirm={() => handleDelete()}
+      />
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm print:break-inside-avoid">
         <h2 className="text-lg font-semibold">פרטי תלמידה</h2>

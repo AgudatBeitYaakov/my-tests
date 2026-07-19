@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Plus, Printer, Upload } from "lucide-react";
+import { Pencil, Plus, Printer, Trash2, Upload } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
@@ -15,6 +15,7 @@ import {
 import { ListFilterBar } from "@/components/ui/ListFilterBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { ExportExcelButton } from "@/components/ui/ExportExcelButton";
+import { ConfirmDangerDialog } from "@/components/ui/ConfirmDangerDialog";
 import { StudentCardsPrintConfirmDialog } from "@/components/students/StudentCardsPrintConfirmDialog";
 import { printStudentCards } from "@/components/students/StudentCardPrintActions";
 import type { StudentCardData } from "@/lib/students/loadStudentCardData";
@@ -42,6 +43,8 @@ export function StudentsListClient() {
   const [trackId, setTrackId] = useState("");
   const [psychology, setPsychology] = useState("");
   const [teachingType, setTeachingType] = useState("");
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const deferred = useDeferredValue(q);
   const url = useMemo(() => {
     const p = new URLSearchParams();
@@ -117,6 +120,26 @@ export function StudentsListClient() {
     void printStudentCards(printPreview.cards);
     setPrintDialogOpen(false);
     setPrintPreview(null);
+  }
+
+  async function deleteStudent() {
+    if (!studentToDelete) return;
+    setDeleteBusy(true);
+    try {
+      const r = await fetch(
+        withYearQuery(`/api/students/${studentToDelete.id}`, viewingYear?.id),
+        { method: "DELETE" },
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        alert((j as { error?: string }).error ?? "מחיקה נכשלה");
+        return;
+      }
+      setStudentToDelete(null);
+      await mutate();
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   const { data: clData } = useSWR<{ items: { id: string; name: string }[] }>(
@@ -299,13 +322,25 @@ export function StudentsListClient() {
                   <TableCell>{psychologyLabel(s.is_psychology)}</TableCell>
                   <TableCell>{teachingTrackTypeLabel(s.teaching_track_type)}</TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <Link
-                      href={`/students/${s.id}/edit`}
-                      className={LIST_ROW_LINK_CLASS}
-                    >
-                      <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
-                      עריכה
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/students/${s.id}/edit`}
+                        className={LIST_ROW_LINK_CLASS}
+                      >
+                        <Pencil className="size-3.5 shrink-0 opacity-80" strokeWidth={2} />
+                        עריכה
+                      </Link>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => setStudentToDelete(s)}
+                          className="inline-flex items-center gap-1 text-sm text-red-700 hover:text-red-900"
+                        >
+                          <Trash2 className="size-3.5 shrink-0" strokeWidth={2} />
+                          מחיקה
+                        </button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -339,6 +374,21 @@ export function StudentsListClient() {
         busy={printBusy}
         studentCount={printPreview?.studentCount ?? 0}
         estimatedPages={printPreview?.estimatedPages ?? 0}
+      />
+
+      <ConfirmDangerDialog
+        open={Boolean(studentToDelete)}
+        onClose={() => !deleteBusy && setStudentToDelete(null)}
+        title="מחיקת תלמידה"
+        description={
+          studentToDelete
+            ? `${studentToDelete.last_name} ${studentToDelete.first_name}`
+            : undefined
+        }
+        hint="התלמידה תימחק לצמיתות מהמסד. המחיקה תתאפשר רק אם אין לה מבחנים מקושרים."
+        confirmLabel="מחק לצמיתות"
+        busy={deleteBusy}
+        onConfirm={() => deleteStudent()}
       />
     </div>
   );

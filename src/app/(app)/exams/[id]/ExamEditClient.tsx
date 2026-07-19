@@ -279,11 +279,10 @@ export function ExamEditClient({
       <ConfirmDangerDialog
         open={deleteOpen}
         onClose={() => !deleteBusy && setDeleteOpen(false)}
-        title="מחיקת מבחן לצמיתות"
-        description={`${e.subject} · ${formatHebrewDateFromYmd(e.exam_date)} — פעולה בלתי הפיכה.`}
-        hint={deleteHint}
-        requiredPhrase={EXAM_HARD_DELETE_PHRASE}
-        confirmLabel="כן, מחק לצמיתות"
+        title="מחיקת מבחן"
+        description={`${e.subject} · ${formatHebrewDateFromYmd(e.exam_date)}`}
+        hint={`${deleteHint}\n\nלחיצה על «מחק לצמיתות» תמחק את המבחן ואת כל השיוכים לתלמידות מהמסד נתונים.`}
+        confirmLabel="מחק לצמיתות"
         busy={deleteBusy}
         onConfirm={() => deleteExam()}
       />

@@ -60,9 +60,10 @@ export async function hardDeleteExam(
       .delete()
       .eq("entity_type", "exam_student")
       .in("entity_id", lineIds);
-    if (lineAuditErr) return { error: lineAuditErr.message };
+    if (lineAuditErr) return { error: `audit_logs(exam_student): ${lineAuditErr.message}` };
   }
 
+  // סדר חשוב בגלל FK restrict
   const steps: Array<{ table: string; run: () => PromiseLike<{ error: { message: string } | null }> }> = [
     {
       table: "makeup_tracking",
@@ -94,6 +95,17 @@ export async function hardDeleteExam(
   for (const step of steps) {
     const { error } = await step.run();
     if (error) return { error: `${step.table}: ${error.message}` };
+  }
+
+  // וידוא שהמבחן באמת נמחק
+  const { data: stillThere, error: checkErr } = await supabase
+    .from("exams")
+    .select("id")
+    .eq("id", examId)
+    .maybeSingle();
+  if (checkErr) return { error: checkErr.message };
+  if (stillThere) {
+    return { error: "המבחן לא נמחק מהמסד — בדקי הרשאות service role / RLS" };
   }
 
   return { ok: true };

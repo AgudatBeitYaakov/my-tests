@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * מחיקה קשה של תלמידה — רק אם אין שורות exam_students.
- * מוחקת גם היסטוריה, השלמות יתומות (אם יש), ומעקב.
+ * מחיקה קשה של תלמידה — רק אם אין שיוך למבחנים פעילים.
+ * שיוכים למבחנים שנמחקו (רכה) מנוקים אוטומטית ואז אפשר למחוק.
  */
 export async function hardDeleteStudent(
   supabase: SupabaseClient,
@@ -16,16 +16,39 @@ export async function hardDeleteStudent(
   if (loadErr) return { error: loadErr.message };
   if (!student) return { error: "תלמידה לא נמצאה" };
 
-  const { count: linkedExams, error: linkErr } = await supabase
+  const { data: linkRows, error: linkErr } = await supabase
     .from("exam_students")
-    .select("id", { count: "exact", head: true })
+    .select("id, exam_id")
     .eq("student_id", studentId);
   if (linkErr) return { error: linkErr.message };
-  if ((linkedExams ?? 0) > 0) {
-    return {
-      error: `לא ניתן למחוק תלמידה שמקושרת ל-${linkedExams} מבחנים. יש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
-      linked_exams: linkedExams ?? 0,
-    };
+
+  const links = linkRows ?? [];
+  if (links.length) {
+    const examIds = [...new Set(links.map((r) => r.exam_id as string))];
+    const { data: exams, error: examsErr } = await supabase
+      .from("exams")
+      .select("id, deleted_at")
+      .in("id", examIds);
+    if (examsErr) return { error: examsErr.message };
+
+    const activeExamIds = new Set(
+      (exams ?? [])
+        .filter((e) => !(e as { deleted_at?: string | null }).deleted_at)
+        .map((e) => e.id as string),
+    );
+    // מבחן שנמחק לגמרי / לא נמצא — נחשב יתום
+    const activeLinks = links.filter((r) => activeExamIds.has(r.exam_id as string));
+    if (activeLinks.length > 0) {
+      return {
+        error: `לא ניתן למחוק תלמידה שמקושרת ל-${activeLinks.length} מבחנים פעילים. יש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
+        linked_exams: activeLinks.length,
+      };
+    }
+
+    // ניקוי שיוכים יתומים למבחנים מחוקים
+    const orphanIds = links.map((r) => r.id as string);
+    const { error: orphanErr } = await supabase.from("exam_students").delete().in("id", orphanIds);
+    if (orphanErr) return { error: `exam_students: ${orphanErr.message}` };
   }
 
   const steps: Array<{ table: string; run: () => PromiseLike<{ error: { message: string } | null }> }> = [

@@ -61,7 +61,7 @@ export function ConfirmDangerDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="presentation">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" role="presentation">
       <button
         type="button"
         className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
@@ -73,7 +73,7 @@ export function ConfirmDangerDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${idBase}-title`}
-        className="relative z-[101] w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-600 dark:bg-zinc-900"
+        className="relative z-[301] w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-600 dark:bg-zinc-900"
       >
         <h2 id={`${idBase}-title`} className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           {title}

@@ -10,6 +10,7 @@ import {
 } from "@/lib/academicYears/scope";
 import { asStudentRow } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
+import { notDeleted } from "@/lib/db/softDelete";
 import { propagateStudentChangeToFutureExams } from "@/lib/exams/syncExamStudents";
 import { hardDeleteStudent } from "@/lib/students/deleteStudent";
 import { recordStudentHistoryIfChanged } from "@/lib/students/history";
@@ -46,10 +47,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     {};
 
   if (examIds.length) {
-    const { data: exams } = await supabase
-      .from("exams")
-      .select(`id, subject, exam_date, ${TEACHER_EMBED_IN_EXAM}`)
-      .in("id", examIds);
+    const { data: exams } = await notDeleted(
+      supabase
+        .from("exams")
+        .select(`id, subject, exam_date, ${TEACHER_EMBED_IN_EXAM}`),
+    ).in("id", examIds);
 
     for (const e of exams ?? []) {
       const raw = e as { id: string; subject: string; exam_date: string; teachers: unknown };
@@ -64,10 +66,12 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     }
   }
 
-  const exam_students = (examStudents ?? []).map((es) => ({
-    ...es,
-    exam: examsMeta[es.exam_id] ?? null,
-  }));
+  const exam_students = (examStudents ?? [])
+    .filter((es) => Boolean(examsMeta[es.exam_id]))
+    .map((es) => ({
+      ...es,
+      exam: examsMeta[es.exam_id] ?? null,
+    }));
 
   const { data: makeups } = await supabase
     .from("makeup_exams")
