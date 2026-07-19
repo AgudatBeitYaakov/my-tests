@@ -92,9 +92,16 @@ export function StudentDetailClient({ id }: { id: string }) {
   );
 
   async function handleDelete() {
+    const linked = data?.exam_students?.length ?? 0;
+    if (linked > 0) {
+      alert(
+        `לא ניתן למחוק תלמידה שמקושרת ל-${linked} מבחנים.\nיש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
+      );
+      return;
+    }
     if (
       !confirm(
-        "מחיקת תלמידה תמחק גם נתונים קשורים (מבחנים, השלמות וכו'). פעולה זו אינה ניתנת לביטול. להמשיך?",
+        "מחיקה קשה — התלמידה תימחק לצמיתות מהמסד נתונים.\nפעולה זו מותרת רק כשאין מבחנים מקושרים, ואינה ניתנת לביטול.\nלהמשיך?",
       )
     )
       return;
@@ -118,6 +125,8 @@ export function StudentDetailClient({ id }: { id: string }) {
   }
 
   const s = data.student;
+  const linkedExamCount = data.exam_students?.length ?? 0;
+  const canDelete = linkedExamCount === 0;
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -161,8 +170,14 @@ export function StudentDetailClient({ id }: { id: string }) {
           </Link>
           <button
             type="button"
+            disabled={!canDelete}
+            title={
+              canDelete
+                ? "מחיקה קשה מהמסד — רק אם אין מבחנים מקושרים"
+                : `לא ניתן למחוק — מקושרת ל-${linkedExamCount} מבחנים`
+            }
             onClick={() => void handleDelete()}
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 hover:bg-red-100"
+            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             מחיקה
           </button>
@@ -171,6 +186,12 @@ export function StudentDetailClient({ id }: { id: string }) {
           </Link>
         </div>
       </div>
+      {!canDelete ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 print:hidden">
+          לא ניתן למחוק תלמידה שמקושרת למבחנים ({linkedExamCount}). יש להסיר אותה מהמבחנים או למחוק את
+          המבחנים קודם.
+        </p>
+      ) : null}
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm print:break-inside-avoid">
         <h2 className="text-lg font-semibold">פרטי תלמידה</h2>

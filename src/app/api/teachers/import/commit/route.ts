@@ -16,12 +16,14 @@ export const dynamic = "force-dynamic";
 type CommitBody = {
   rows?: ParsedTeacherRow[];
   skipDuplicates?: boolean;
+  updateExisting?: boolean;
 };
 
 export async function POST(request: Request) {
   const body = (await request.json()) as CommitBody;
   const rowsIn = body.rows ?? [];
-  const skipDuplicates = body.skipDuplicates !== false;
+  const updateExisting = Boolean(body.updateExisting);
+  const skipDuplicates = updateExisting ? false : body.skipDuplicates !== false;
 
   if (!rowsIn.length) return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
 
@@ -62,13 +64,33 @@ export async function POST(request: Request) {
   });
 
   const toInsert: Record<string, unknown>[] = [];
+  const toUpdate: { id: string; patch: Record<string, unknown> }[] = [];
   const rowErrors: { rowNumber: number; errors: string[] }[] = [...failed];
   let skippedDuplicates = 0;
 
   for (const r of good as ValidatedTeacherRow[]) {
     if (!r.resolved) continue;
     const key = teacherImportKey(r.resolved);
+    const patch = {
+      first_name: r.resolved.first_name,
+      last_name: r.resolved.last_name,
+      tz: r.resolved.tz,
+      email: r.resolved.email,
+      notes: r.resolved.notes,
+    };
+
     if (existingKeys.has(key)) {
+      if (updateExisting) {
+        const id =
+          (r.resolved.tz && existing.byTz.get(r.resolved.tz)) ||
+          existing.byName.get(
+            `${r.resolved.first_name} ${r.resolved.last_name}`.trim().replace(/\s+/g, " ").toLowerCase(),
+          );
+        if (id) {
+          toUpdate.push({ id, patch });
+          continue;
+        }
+      }
       if (skipDuplicates) {
         skippedDuplicates += 1;
         continue;
@@ -79,16 +101,13 @@ export async function POST(request: Request) {
     existingKeys.add(key);
     toInsert.push({
       academic_year_id: scope.year.id,
-      first_name: r.resolved.first_name,
-      last_name: r.resolved.last_name,
-      tz: r.resolved.tz,
-      email: r.resolved.email,
-      notes: r.resolved.notes,
+      ...patch,
     });
   }
 
   const chunk = 80;
   let inserted = 0;
+  let updated = 0;
 
   try {
     for (let i = 0; i < toInsert.length; i += chunk) {
@@ -97,11 +116,17 @@ export async function POST(request: Request) {
       if (error) throw new Error(error.message);
       inserted += slice.length;
     }
+    for (const u of toUpdate) {
+      const { error } = await supabase.from("teachers").update(u.patch).eq("id", u.id);
+      if (error) throw new Error(error.message);
+      updated += 1;
+    }
   } catch (e) {
     return NextResponse.json(
       {
         error: (e as Error).message,
         imported: inserted,
+        updated,
         failed: rowErrors.length,
         skippedDuplicates,
         errors: rowErrors,
@@ -113,6 +138,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     imported: inserted,
+    updated,
     skippedDuplicates,
     failed: rowErrors.length,
     errors: rowErrors,

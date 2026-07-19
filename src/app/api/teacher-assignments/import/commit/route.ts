@@ -23,12 +23,14 @@ export const dynamic = "force-dynamic";
 type CommitBody = {
   rows?: ParsedAssignmentRow[];
   skipDuplicates?: boolean;
+  updateExisting?: boolean;
 };
 
 export async function POST(request: Request) {
   const body = (await request.json()) as CommitBody;
   const rowsIn = body.rows ?? [];
-  const skipDuplicates = body.skipDuplicates !== false;
+  const updateExisting = Boolean(body.updateExisting);
+  const skipDuplicates = updateExisting ? false : body.skipDuplicates !== false;
 
   if (!rowsIn.length) {
     return NextResponse.json({ error: "אין שורות לייבוא" }, { status: 400 });
@@ -61,24 +63,15 @@ export async function POST(request: Request) {
   });
 
   const toInsert: Record<string, unknown>[] = [];
+  const toUpdate: { id: string; patch: Record<string, unknown> }[] = [];
   const rowErrors: { rowNumber: number; errors: string[] }[] = [...failed];
   let skippedDuplicates = 0;
 
   for (const r of good as ValidatedAssignmentRow[]) {
     if (!r.resolved) continue;
     const key = assignmentImportKey(ctx.academicYearId, r.resolved);
-    if (ctx.existingKeys.has(key)) {
-      if (skipDuplicates) {
-        skippedDuplicates += 1;
-        continue;
-      }
-      rowErrors.push({ rowNumber: r.rowNumber, errors: ["שיבוץ זהה כבר קיים"] });
-      continue;
-    }
-    ctx.existingKeys.add(key);
     const fingerprint = computeTargetsFingerprint(r.resolved);
-    toInsert.push({
-      academic_year_id: ctx.academicYearId,
+    const patch = {
       teacher_id: r.resolved.teacher_id,
       subject: r.resolved.subject,
       lesson_name: r.resolved.lesson_name,
@@ -91,10 +84,31 @@ export async function POST(request: Request) {
       applies_to_all_in_grade: r.resolved.applies_to_all_in_grade,
       targets_fingerprint: fingerprint,
       teaching_mode: r.resolved.teaching_mode,
+    };
+
+    if (ctx.existingKeys.has(key)) {
+      if (updateExisting) {
+        const id = ctx.existingKeyToId.get(key);
+        if (id) {
+          toUpdate.push({ id, patch });
+          continue;
+        }
+      }
+      if (skipDuplicates) {
+        skippedDuplicates += 1;
+        continue;
+      }
+      rowErrors.push({ rowNumber: r.rowNumber, errors: ["שיבוץ זהה כבר קיים"] });
+      continue;
+    }
+    ctx.existingKeys.add(key);
+    toInsert.push({
+      academic_year_id: ctx.academicYearId,
+      ...patch,
     });
   }
 
-  if (!toInsert.length) {
+  if (!toInsert.length && !toUpdate.length) {
     const msg =
       rowErrors.length > 0
         ? "לא נוסף אף שיבוץ — יש שגיאות בשורות (ראי פירוט למטה)"
@@ -105,6 +119,7 @@ export async function POST(request: Request) {
       {
         error: msg,
         imported: 0,
+        updated: 0,
         failed: rowErrors.length,
         skippedDuplicates,
         errors: rowErrors,
@@ -115,6 +130,7 @@ export async function POST(request: Request) {
 
   const chunk = 80;
   let inserted = 0;
+  let updated = 0;
 
   try {
     for (let i = 0; i < toInsert.length; i += chunk) {
@@ -123,12 +139,18 @@ export async function POST(request: Request) {
       if (error) throw new Error(error.message);
       inserted += slice.length;
     }
+    for (const u of toUpdate) {
+      const { error } = await supabase.from("teacher_assignments").update(u.patch).eq("id", u.id);
+      if (error) throw new Error(error.message);
+      updated += 1;
+    }
   } catch (e) {
     const raw = (e as Error).message;
     return NextResponse.json(
       {
         error: dbSchemaHint(formatAssignmentImportInsertError(raw)),
         imported: inserted,
+        updated,
         failed: rowErrors.length,
         skippedDuplicates,
         errors: rowErrors,
@@ -140,6 +162,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     imported: inserted,
+    updated,
     skippedDuplicates,
     failed: rowErrors.length,
     errors: rowErrors,

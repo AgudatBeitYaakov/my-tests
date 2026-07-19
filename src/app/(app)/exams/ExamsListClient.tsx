@@ -315,6 +315,7 @@ export function ExamsListClient() {
         open={Boolean(examWorkspace)}
         initialView={examWorkspace?.view ?? "students"}
         onClose={() => setExamWorkspace(null)}
+        onDeleted={() => void mutate()}
       />
     </div>
   );

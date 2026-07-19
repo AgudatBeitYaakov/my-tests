@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear } from "@/components/academicYears/AcademicYearProvider";
+import { YearDataBulkPanel } from "@/components/academicYears/YearDataBulkPanel";
 import { ListPageHeader } from "@/components/ui/ListPage";
 import { Spinner } from "@/components/ui/Spinner";
 import type { AcademicYearRow } from "@/lib/academicYears/types";
@@ -70,6 +71,8 @@ export function AcademicYearsClient() {
         title="שנות לימוד"
         subtitle="כל שנה היא מערכת עצמאית — אין העתקה או קידום בין שנים. רק שנה אחת פעילה."
       />
+
+      <YearDataBulkPanel />
 
       <form onSubmit={createYear} className="rounded-2xl border bg-white p-6 dark:bg-zinc-900/40">
         <h2 className="text-lg font-semibold">פתיחת שנת לימודים</h2>

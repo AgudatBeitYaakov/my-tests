@@ -11,6 +11,7 @@ import {
 import { asStudentRow } from "@/lib/db/studentRow";
 import { getStudentWithLookupsSelect } from "@/lib/db/studentSelect";
 import { propagateStudentChangeToFutureExams } from "@/lib/exams/syncExamStudents";
+import { hardDeleteStudent } from "@/lib/students/deleteStudent";
 import { recordStudentHistoryIfChanged } from "@/lib/students/history";
 import { normalizeStudentFields } from "@/lib/students/patch";
 import { TEACHER_EMBED_IN_EXAM } from "@/lib/teachers/db";
@@ -238,15 +239,19 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   }
 
   const user = await getCurrentUser(supabase);
-
   const { data: before } = await supabase.from("students").select("*").eq("id", id).single();
-  const { error } = await supabase
-    .from("students")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!before) return NextResponse.json({ error: "תלמידה לא נמצאה" }, { status: 404 });
 
-  const delName = before ? `${before.last_name} ${before.first_name}` : null;
+  const delName = `${before.last_name} ${before.first_name}`;
+
+  const result = await hardDeleteStudent(supabase, id);
+  if ("error" in result) {
+    return NextResponse.json(
+      { error: result.error, linked_exams: result.linked_exams },
+      { status: 400 },
+    );
+  }
+
   await writeAudit(supabase, {
     userId: user?.id ?? null,
     entityType: "student",
@@ -256,5 +261,5 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     oldValue: before,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, hard_deleted: true });
 }

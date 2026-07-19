@@ -59,6 +59,12 @@ export type ExamStudentsExam = {
 type ExamPayload = {
   exam: ExamStudentsExam;
   exam_students: ExamStudentLine[];
+  delete_preview?: {
+    exam_students: number;
+    makeup_exams: number;
+    makeup_tracking: number;
+    exam_tracking: number;
+  };
 };
 
 function countStatuses(lines: ExamStudentLine[]) {

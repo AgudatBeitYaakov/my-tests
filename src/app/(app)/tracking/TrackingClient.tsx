@@ -679,6 +679,7 @@ export function TrackingClient() {
         examId={examModalId}
         open={Boolean(examModalId)}
         onClose={() => setExamModalId(null)}
+        onDeleted={() => void mutate()}
       />
     </div>
   );

@@ -828,6 +828,7 @@ export function MakeupsClient() {
         examId={examModalId}
         open={Boolean(examModalId)}
         onClose={() => setExamModalId(null)}
+        onDeleted={() => void mutate()}
       />
     </div>
   );

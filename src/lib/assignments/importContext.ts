@@ -13,6 +13,8 @@ import type { AssignmentCategory, TeachingTrackType } from "@/lib/types/db";
 export type AssignmentImportContext = AssignmentImportMaps & {
   academicYearId: string;
   existingKeys: Set<string>;
+  /** מפתח ייבוא → id שיבוץ קיים (לעדכון) */
+  existingKeyToId: Map<string, string>;
 };
 
 export async function loadAssignmentImportContext(
@@ -44,7 +46,7 @@ export async function loadAssignmentImportContext(
     ),
     notDeleted(
       supabase.from("teacher_assignments").select(
-        "teacher_id,grade_levels,subject,lesson_name,assignment_category,class_ids,track_ids,specialization_ids,psychology_enabled,applies_to_all_in_grade,teaching_mode",
+        "id,teacher_id,grade_levels,subject,lesson_name,assignment_category,class_ids,track_ids,specialization_ids,psychology_enabled,applies_to_all_in_grade,teaching_mode",
       ),
     ).eq("academic_year_id", academicYearId),
   ]);
@@ -59,18 +61,20 @@ export async function loadAssignmentImportContext(
   const trackNameById = new Map((tr.data ?? []).map((r) => [r.id, r.name.trim()] as const));
   const teacherMaps: TeacherLookupMaps = buildTeacherLookupMaps(teachersRes.data ?? []);
 
-  const existingKeys = new Set(
-    (existingRes.data ?? []).map((a) =>
-      assignmentImportKey(academicYearId, {
-        teacher_id: a.teacher_id,
-        subject: a.subject.trim(),
-        lesson_name: (a.lesson_name as string | null) ?? null,
-        teaching_mode: (a.teaching_mode as TeachingTrackType | null) ?? null,
-        assignment_category: a.assignment_category as AssignmentCategory,
-        ...rowToMultiTarget(a as Parameters<typeof rowToMultiTarget>[0]),
-      }),
-    ),
-  );
+  const existingKeys = new Set<string>();
+  const existingKeyToId = new Map<string, string>();
+  for (const a of existingRes.data ?? []) {
+    const key = assignmentImportKey(academicYearId, {
+      teacher_id: a.teacher_id,
+      subject: a.subject.trim(),
+      lesson_name: (a.lesson_name as string | null) ?? null,
+      teaching_mode: (a.teaching_mode as TeachingTrackType | null) ?? null,
+      assignment_category: a.assignment_category as AssignmentCategory,
+      ...rowToMultiTarget(a as Parameters<typeof rowToMultiTarget>[0]),
+    });
+    existingKeys.add(key);
+    existingKeyToId.set(key, a.id as string);
+  }
 
   return {
     ctx: {
@@ -81,6 +85,7 @@ export async function loadAssignmentImportContext(
       trackByName,
       trackNameById,
       existingKeys,
+      existingKeyToId,
     },
   };
 }
