@@ -385,7 +385,7 @@ export function StudentsListClient() {
             ? `${studentToDelete.last_name} ${studentToDelete.first_name}`
             : undefined
         }
-        hint="התלמידה תימחק לצמיתות מהמסד. המחיקה תתאפשר רק אם אין לה מבחנים מקושרים."
+        hint="התלמידה תימחק לצמיתות מהמסד. אם מקושרת למבחן אחד בלבד — גם השיוך למבחן יימחק. אם מקושרת ליותר ממבחן אחד — המחיקה תיחסם."
         confirmLabel="מחק לצמיתות"
         busy={deleteBusy}
         onConfirm={() => deleteStudent()}

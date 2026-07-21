@@ -213,9 +213,10 @@ export function ExamWorkspaceModal({
         }
         hint={
           buildDeleteHint(preview, locked) +
-          "\n\nלחיצה על «מחק לצמיתות» תמחק את המבחן ואת כל השיוכים לתלמידות מהמסד נתונים."
+          `\n\nלאישור הקלידי בדיוק: ${EXAM_HARD_DELETE_PHRASE}`
         }
         confirmLabel="מחק לצמיתות"
+        requiredPhrase={EXAM_HARD_DELETE_PHRASE}
         busy={deleteBusy}
         onConfirm={() => deleteExam()}
       />

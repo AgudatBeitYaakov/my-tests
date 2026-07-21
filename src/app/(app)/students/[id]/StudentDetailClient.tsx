@@ -123,7 +123,7 @@ export function StudentDetailClient({ id }: { id: string }) {
 
   const s = data.student;
   const linkedExamCount = data.exam_students?.length ?? 0;
-  const canDelete = linkedExamCount === 0;
+  const canDelete = linkedExamCount <= 1;
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -169,9 +169,11 @@ export function StudentDetailClient({ id }: { id: string }) {
             type="button"
             disabled={!canDelete}
             title={
-              canDelete
-                ? "מחיקה קשה מהמסד — רק אם אין מבחנים מקושרים"
-                : `לא ניתן למחוק — מקושרת ל-${linkedExamCount} מבחנים`
+              linkedExamCount === 0
+                ? "מחיקה קשה מהמסד"
+                : linkedExamCount === 1
+                  ? "מחיקה קשה — יימחק גם השיוך למבחן היחיד"
+                  : `לא ניתן למחוק — מקושרת ל-${linkedExamCount} מבחנים`
             }
             onClick={() => setDeleteOpen(true)}
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
@@ -183,9 +185,13 @@ export function StudentDetailClient({ id }: { id: string }) {
           </Link>
         </div>
       </div>
-      {!canDelete ? (
+      {linkedExamCount === 1 ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 print:hidden">
-          לא ניתן למחוק תלמידה שמקושרת למבחנים ({linkedExamCount}). יש להסיר אותה מהמבחנים או למחוק את
+          התלמידה מקושרת למבחן אחד. במחיקה — התלמידה והשיוך למבחן יימחקו לצמיתות מהמסד.
+        </p>
+      ) : linkedExamCount > 1 ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 print:hidden">
+          לא ניתן למחוק תלמידה שמקושרת ל-{linkedExamCount} מבחנים. יש להסיר אותה מהמבחנים או למחוק את
           המבחנים קודם.
         </p>
       ) : null}
@@ -195,7 +201,11 @@ export function StudentDetailClient({ id }: { id: string }) {
         onClose={() => !deleteBusy && setDeleteOpen(false)}
         title="מחיקת תלמידה"
         description={`${s.last_name} ${s.first_name}`}
-        hint="מחיקה קשה — התלמידה תימחק לצמיתות מהמסד נתונים. פעולה זו אינה ניתנת לביטול."
+        hint={
+          linkedExamCount === 1
+            ? "מחיקה קשה — התלמידה והשיוך למבחן היחיד שלה יימחקו לצמיתות מהמסד. פעולה זו אינה ניתנת לביטול."
+            : "מחיקה קשה — התלמידה תימחק לצמיתות מהמסד נתונים. פעולה זו אינה ניתנת לביטול."
+        }
         confirmLabel="מחק לצמיתות"
         busy={deleteBusy}
         onConfirm={() => handleDelete()}

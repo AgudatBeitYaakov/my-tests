@@ -1,8 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * מחיקה קשה של תלמידה — רק אם אין שיוך למבחנים פעילים.
- * שיוכים למבחנים שנמחקו (רכה) מנוקים אוטומטית ואז אפשר למחוק.
+ * מחיקה קשה של תלמידה.
+ * — ללא מבחנים פעילים: מחיקה ישירה.
+ * — מבחן פעיל אחד בלבד: מוחקים קודם את השיוך (exam_students + השלמות/מעקב) ואז את התלמידה.
+ * — יותר ממבחן פעיל אחד: חסום.
+ * שיוכים למבחנים שנמחקו (רכה) מנוקים אוטומטית.
  */
 export async function hardDeleteStudent(
   supabase: SupabaseClient,
@@ -38,17 +41,54 @@ export async function hardDeleteStudent(
     );
     // מבחן שנמחק לגמרי / לא נמצא — נחשב יתום
     const activeLinks = links.filter((r) => activeExamIds.has(r.exam_id as string));
-    if (activeLinks.length > 0) {
+    const activeExamIdList = [...new Set(activeLinks.map((r) => r.exam_id as string))];
+
+    if (activeExamIdList.length > 1) {
       return {
-        error: `לא ניתן למחוק תלמידה שמקושרת ל-${activeLinks.length} מבחנים פעילים. יש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
-        linked_exams: activeLinks.length,
+        error: `לא ניתן למחוק תלמידה שמקושרת ל-${activeExamIdList.length} מבחנים פעילים. יש להסיר אותה מהמבחנים קודם, או למחוק את המבחנים.`,
+        linked_exams: activeExamIdList.length,
       };
     }
 
+    if (activeExamIdList.length === 1) {
+      const examId = activeExamIdList[0]!;
+      const activeLineIds = activeLinks.map((r) => r.id as string);
+
+      if (activeLineIds.length) {
+        const { error: lineAuditErr } = await supabase
+          .from("audit_logs")
+          .delete()
+          .eq("entity_type", "exam_student")
+          .in("entity_id", activeLineIds);
+        if (lineAuditErr) return { error: `audit_logs(exam_student): ${lineAuditErr.message}` };
+      }
+
+      const { error: mtErr } = await supabase
+        .from("makeup_tracking")
+        .delete()
+        .eq("student_id", studentId)
+        .eq("exam_id", examId);
+      if (mtErr) return { error: `makeup_tracking: ${mtErr.message}` };
+
+      const { error: meErr } = await supabase
+        .from("makeup_exams")
+        .delete()
+        .eq("student_id", studentId)
+        .eq("exam_id", examId);
+      if (meErr) return { error: `makeup_exams: ${meErr.message}` };
+
+      const { error: esErr } = await supabase.from("exam_students").delete().in("id", activeLineIds);
+      if (esErr) return { error: `exam_students: ${esErr.message}` };
+    }
+
     // ניקוי שיוכים יתומים למבחנים מחוקים
-    const orphanIds = links.map((r) => r.id as string);
-    const { error: orphanErr } = await supabase.from("exam_students").delete().in("id", orphanIds);
-    if (orphanErr) return { error: `exam_students: ${orphanErr.message}` };
+    const orphanIds = links
+      .filter((r) => !activeExamIds.has(r.exam_id as string))
+      .map((r) => r.id as string);
+    if (orphanIds.length) {
+      const { error: orphanErr } = await supabase.from("exam_students").delete().in("id", orphanIds);
+      if (orphanErr) return { error: `exam_students: ${orphanErr.message}` };
+    }
   }
 
   const steps: Array<{ table: string; run: () => PromiseLike<{ error: { message: string } | null }> }> = [

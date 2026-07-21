@@ -281,8 +281,9 @@ export function ExamEditClient({
         onClose={() => !deleteBusy && setDeleteOpen(false)}
         title="מחיקת מבחן"
         description={`${e.subject} · ${formatHebrewDateFromYmd(e.exam_date)}`}
-        hint={`${deleteHint}\n\nלחיצה על «מחק לצמיתות» תמחק את המבחן ואת כל השיוכים לתלמידות מהמסד נתונים.`}
+        hint={`${deleteHint}\n\nלאישור הקלידי בדיוק: ${EXAM_HARD_DELETE_PHRASE}`}
         confirmLabel="מחק לצמיתות"
+        requiredPhrase={EXAM_HARD_DELETE_PHRASE}
         busy={deleteBusy}
         onConfirm={() => deleteExam()}
       />
