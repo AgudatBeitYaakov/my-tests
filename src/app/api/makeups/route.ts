@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   );
 
   const SELECT_WITH_FIELDS =
-    "id, status, created_at, completed_at, grade, student_id, exam_id, notes, auto_registered, starting_grade, is_paid";
+    "id, status, created_at, completed_at, grade, student_id, exam_id, notes, auto_registered, starting_grade, is_paid, amount";
   const SELECT_WITH_AUTO =
     "id, status, created_at, completed_at, grade, student_id, exam_id, notes, auto_registered";
   const SELECT_LEGACY =
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     | null;
   let error = first.error;
 
-  if (error && /starting_grade|is_paid/i.test(error.message)) {
+  if (error && /starting_grade|is_paid|amount/i.test(error.message)) {
     const mid = await supabase
       .from("makeup_exams")
       .select(SELECT_WITH_AUTO)
@@ -138,6 +138,7 @@ export async function GET(request: Request) {
   const makeups = (rows ?? []).map((r) => {
     const row = r as Record<string, unknown> & { student_id: string; exam_id: string };
     const rawGrade = row.starting_grade;
+    const rawAmount = row.amount;
     const pairKey = `${row.exam_id}:${row.student_id}`;
     return {
       ...row,
@@ -145,6 +146,8 @@ export async function GET(request: Request) {
       starting_grade:
         rawGrade === null || rawGrade === undefined ? null : Number(rawGrade),
       is_paid: Boolean(row.is_paid),
+      amount:
+        rawAmount === null || rawAmount === undefined ? null : Number(rawAmount),
       exam_student_notes: examStudentNotesByKey[pairKey] ?? null,
       student: studentsBy[row.student_id] ?? null,
       exam: examsBy[row.exam_id] ?? null,

@@ -306,4 +306,7 @@ where not exists (
 -- ─── PATCH_ASSIGNMENT_MULTI_TARGET (שיבוץ רב-יעדי בשורה אחת) ─────────────────
 -- הריצי לפני notify: supabase/PATCH_ASSIGNMENT_MULTI_TARGET.sql (בנפרד או אחרי קובץ זה)
 
+-- ─── PATCH_MAKEUP_PAYMENT_AMOUNT ────────────────────────────────────────────
+alter table public.makeup_exams add column if not exists amount numeric;
+
 notify pgrst, 'reload schema';

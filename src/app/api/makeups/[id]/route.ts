@@ -15,6 +15,13 @@ function parseStartingGrade(raw: number | string | null | undefined): number | n
   return n;
 }
 
+function parseAmount(raw: number | string | null | undefined): number | null | "invalid" {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return "invalid";
+  return n;
+}
+
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const body = (await request.json()) as {
@@ -24,6 +31,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     auto_registered?: boolean;
     starting_grade?: number | string | null;
     is_paid?: boolean;
+    amount?: number | string | null;
     clear_registration?: boolean;
   };
 
@@ -55,6 +63,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     patch.completed_at = null;
     patch.starting_grade = null;
     patch.is_paid = false;
+    patch.amount = null;
   } else {
     if (body.notes !== undefined) patch.notes = body.notes?.trim() || null;
 
@@ -79,6 +88,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         patch.starting_grade = sg;
       }
       if (body.is_paid !== undefined) patch.is_paid = Boolean(body.is_paid);
+      if (body.amount !== undefined) {
+        const amt = parseAmount(body.amount);
+        if (amt === "invalid") {
+          return NextResponse.json({ error: "סכום חייב להיות מספר שאינו שלילי" }, { status: 400 });
+        }
+        patch.amount = amt;
+      }
     } else if (body.auto_registered !== undefined) {
       patch.auto_registered = Boolean(body.auto_registered);
     }
@@ -110,6 +126,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       patch.is_paid = Boolean(body.is_paid);
     }
 
+    if (body.amount !== undefined && body.auto_registered !== true) {
+      const amt = parseAmount(body.amount);
+      if (amt === "invalid") {
+        return NextResponse.json({ error: "סכום חייב להיות מספר שאינו שלילי" }, { status: 400 });
+      }
+      patch.amount = amt;
+    }
+
     if (body.grade !== undefined) {
       const raw = body.grade;
       if (raw === null || raw === "") {
@@ -135,11 +159,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     .select("*")
     .single();
 
-  if (error && /auto_registered|starting_grade|is_paid/i.test(error.message)) {
+  if (error && /auto_registered|starting_grade|is_paid|amount/i.test(error.message)) {
     const fallback = { ...patch };
     delete fallback.auto_registered;
     delete fallback.starting_grade;
     delete fallback.is_paid;
+    delete fallback.amount;
     if (!Object.keys(fallback).length) {
       return NextResponse.json(
         {

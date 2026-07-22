@@ -112,6 +112,7 @@ export type MakeupExam = {
   status: MakeupExamStatus;
   created_at: string;
   completed_at: string | null;
+  amount?: number | null;
 };
 
 export type ExamTracking = {

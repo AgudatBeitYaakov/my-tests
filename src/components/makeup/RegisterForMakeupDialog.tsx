@@ -7,6 +7,7 @@ export type RegisterForMakeupPayload = {
   completed_at: string;
   starting_grade: number | null;
   is_paid: boolean;
+  amount: number | null;
 };
 
 type Props = {
@@ -29,12 +30,14 @@ export function RegisterForMakeupDialog({
   const [date, setDate] = useState("");
   const [startingGrade, setStartingGrade] = useState("");
   const [isPaid, setIsPaid] = useState(false);
+  const [amount, setAmount] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setDate("");
     setStartingGrade("");
     setIsPaid(false);
+    setAmount("");
   }, [open]);
 
   useEffect(() => {
@@ -59,8 +62,17 @@ export function RegisterForMakeupDialog({
       }
       grade = n;
     }
+    let paymentAmount: number | null = null;
+    if (amount.trim()) {
+      const n = Number(amount.replace(",", "."));
+      if (!Number.isFinite(n) || n < 0) {
+        alert("סכום חייב להיות מספר שאינו שלילי");
+        return;
+      }
+      paymentAmount = n;
+    }
     const completed_at = new Date(`${date.trim()}T12:00:00`).toISOString();
-    await onSave({ completed_at, starting_grade: grade, is_paid: isPaid });
+    await onSave({ completed_at, starting_grade: grade, is_paid: isPaid, amount: paymentAmount });
   }
 
   return (
@@ -127,6 +139,19 @@ export function RegisterForMakeupDialog({
               ))}
             </div>
           </fieldset>
+          <label className="block text-sm font-medium text-zinc-700">
+            סכום
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={busy}
+              placeholder="אופציונלי"
+              className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            />
+          </label>
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-2">

@@ -296,14 +296,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           supabase
             .from("makeup_exams")
             .select(
-              "id, status, created_at, completed_at, student_id, exam_id, auto_registered, starting_grade, is_paid",
+              "id, status, created_at, completed_at, student_id, exam_id, auto_registered, starting_grade, is_paid, amount",
             )
             .order("created_at", { ascending: false })
             .range(from, to),
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (/starting_grade|is_paid/i.test(msg)) {
+        if (/starting_grade|is_paid|amount/i.test(msg)) {
           data = await paginateSelect((from, to) =>
             supabase
               .from("makeup_exams")
@@ -356,6 +356,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           auto_registered?: boolean;
           starting_grade?: number | null;
           is_paid?: boolean;
+          amount?: number | null;
         };
         const st = studentsBy[row.student_id];
         const ex = examsBy[row.exam_id];
@@ -365,6 +366,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ kind: strin
           תאריך_השלמה: row.completed_at ? hebrewYmd(row.completed_at.slice(0, 10)) : "",
           ציון_התחלה: row.starting_grade ?? "",
           בתשלום: row.is_paid ? "כן" : "לא",
+          סכום: row.amount ?? "",
           נוצר: row.created_at?.slice(0, 19) ?? "",
           שם_פרטי: st?.first_name ?? "",
           שם_משפחה: st?.last_name ?? "",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, CheckCircle2, Pencil, Undo2, UserRound } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useAcademicYear, withYearQuery } from "@/components/academicYears/AcademicYearProvider";
 import { ExamWorkspaceModal } from "@/components/exams/ExamWorkspaceModal";
@@ -52,6 +52,7 @@ type Row = {
   auto_registered: boolean;
   starting_grade: number | null;
   is_paid: boolean;
+  amount: number | null;
   student: {
     first_name: string;
     last_name: string;
@@ -102,6 +103,84 @@ function RegisteredForMakeupCell({
     >
       {busy ? <Spinner className="size-3" /> : label}
     </button>
+  );
+}
+
+function MakeupAmountCell({
+  rowId,
+  value,
+  enabled,
+  readOnly,
+  yearId,
+  onSaved,
+}: {
+  rowId: string;
+  value: number | null;
+  enabled: boolean;
+  readOnly: boolean;
+  yearId: string | undefined;
+  onSaved: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value != null ? String(value) : "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(value != null ? String(value) : "");
+  }, [rowId, value]);
+
+  if (!enabled) return <>—</>;
+
+  async function save() {
+    if (readOnly || saving) return;
+    const trimmed = draft.trim();
+    let next: number | null = null;
+    if (trimmed) {
+      const n = Number(trimmed.replace(",", "."));
+      if (!Number.isFinite(n) || n < 0) {
+        alert("סכום חייב להיות מספר שאינו שלילי");
+        setDraft(value != null ? String(value) : "");
+        return;
+      }
+      next = n;
+    }
+    if (next === value) return;
+    setSaving(true);
+    try {
+      const r = await fetch(withYearQuery(`/api/makeups/${rowId}`, yearId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: next }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "שמירה נכשלה");
+      await onSaved();
+    } catch (e) {
+      alert((e as Error).message);
+      setDraft(value != null ? String(value) : "");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (readOnly) {
+    return <span className="tabular-nums">{value != null ? value : "—"}</span>;
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      step={1}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void save();
+      }}
+      disabled={saving}
+      placeholder="—"
+      className="w-full min-w-0 rounded border border-zinc-200 px-1 py-0.5 text-[11px] tabular-nums"
+    />
   );
 }
 
@@ -235,6 +314,7 @@ export function MakeupsClient() {
           completed_at: payload.completed_at,
           starting_grade: payload.starting_grade,
           is_paid: payload.is_paid,
+          amount: payload.amount,
         }),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -343,6 +423,7 @@ export function MakeupsClient() {
         m.auto_registered && m.completed_at ? formatMakeupDate(m.completed_at) : "",
       ציון_התחלה: m.auto_registered && m.starting_grade != null ? m.starting_grade : "",
       בתשלום: m.auto_registered ? (m.is_paid ? "כן" : "לא") : "",
+      סכום: m.auto_registered && m.amount != null ? m.amount : "",
       נוצר: m.created_at?.slice(0, 19) ?? "",
       שם_תלמידה: m.student ? `${m.student.last_name} ${m.student.first_name}` : "",
       שם_מבחן: m.exam?.subject ?? "",
@@ -569,9 +650,10 @@ export function MakeupsClient() {
             <col style={{ width: "7%" }} />
             <col style={{ width: "5%" }} />
             <col style={{ width: "5%" }} />
+            <col style={{ width: "5%" }} />
             <col style={{ width: "4%" }} />
-            <col style={{ width: "14%" }} />
-            <col style={{ width: "13%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
           </colgroup>
           <TableHeader>
             <TableRow>
@@ -584,6 +666,7 @@ export function MakeupsClient() {
               <TableHead className="px-1 py-2" title="תאריך השלמה">ת.השלמה</TableHead>
               <TableHead className="px-1 py-2" title="ציון התחלה">צ.התחלה</TableHead>
               <TableHead className="px-1 py-2" title="בתשלום">תש׳</TableHead>
+              <TableHead className="px-1 py-2" title="סכום">סכום</TableHead>
               <TableHead className="px-1 py-2">ציון</TableHead>
               <TableHead className="px-1 py-2">הערה</TableHead>
               <TableHead className="px-1 py-2">פעולות</TableHead>
@@ -638,6 +721,18 @@ export function MakeupsClient() {
                     ) : (
                       "—"
                     )}
+                  </TableCell>
+                  <TableCell className="px-1.5 py-1.5">
+                    <MakeupAmountCell
+                      rowId={m.id}
+                      value={m.amount}
+                      enabled={m.auto_registered}
+                      readOnly={readOnly}
+                      yearId={viewingYear?.id}
+                      onSaved={async () => {
+                        await mutate();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="px-1.5 py-1.5 tabular-nums">{m.grade ?? "—"}</TableCell>
                   <TableCell className="max-w-0 px-1.5 py-1.5">
